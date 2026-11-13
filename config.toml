@@ -28,6 +28,11 @@ right = 930
 top = 250
 bottom = 1440
 
+[sound]
+# Keyboard-typing sound on Engine A/B videos, synced to the word reveal (synthesised, no assets).
+typing = true
+typing_volume = 0.4        # 0..1
+
 [engine_a]
 fps = 30
 # Base seconds per step; scaled by word count.
@@ -51,7 +56,8 @@ whisper_model_cpu = "small"
 language = "en"
 max_download_height = 1080
 min_clip_seconds = 20
-max_clip_seconds = 75
+max_clip_seconds = 55      # target length asked of Claude / the heuristic
+hard_max_seconds = 59      # every clip is trimmed (at a sentence end) to stay under 1 minute
 subtitle_y = 1300
 subtitle_font_size = 86
 words_per_group = 3

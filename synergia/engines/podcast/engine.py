@@ -102,6 +102,7 @@ def run(inp: str, debug: bool = False) -> Path:
         chosen = picked[0]
 
     chosen.end = min(chosen.end, info["duration"])
+    _cap(chosen, tr["words"])
     console.print(f"[green]✓[/green] Clip {hl.fmt_ts(chosen.start)}–{hl.fmt_ts(chosen.end)} "
                   f"({chosen.duration:.1f}s)")
     title = chosen.title if chosen.why and not chosen.why.startswith("heuristic") else ""
@@ -110,6 +111,15 @@ def run(inp: str, debug: bool = False) -> Path:
     title = "" if title == "-" else title
 
     return _render_one(src, info, name, chosen, title, tr["words"], debug, credit_str)
+
+
+def _cap(c: hl.Candidate, words: list[dict]) -> None:
+    """Enforce the < 1 minute rule (hard_max_seconds); trims at a sentence end."""
+    before = c.duration
+    c.start, c.end = hl.fit_limit(c.start, c.end, words)
+    if c.duration < before - 0.01:
+        console.print(f"[yellow]Trimmed {before:.1f}s -> {c.duration:.1f}s "
+                      f"(clips must stay under {hl.hard_max():.0f}s)[/yellow]")
 
 
 def _parse_pick(c: str, cands: list[hl.Candidate]) -> list[hl.Candidate]:
@@ -127,6 +137,7 @@ def _parse_pick(c: str, cands: list[hl.Candidate]) -> list[hl.Candidate]:
 
 def _render_one(src: Path, info: dict, name: str, c: hl.Candidate, title: str,
                 words: list[dict], debug: bool, credit: str = "") -> Path:
+    _cap(c, words)
     out = run_dir("C", title or name)
     render_clip(src, info, c.start, c.end, words, out, title=title, debug=debug)
     save_meta(out, {"source": str(src), "source_title": name, "start": c.start,
@@ -141,6 +152,7 @@ def _render_batch(src: Path, info: dict, name: str, picked: list[hl.Candidate],
     outs: list[Path] = []
     for i, c in enumerate(picked, 1):
         c.end = min(c.end, info["duration"])
+        _cap(c, words)
         title = c.title if c.why and not c.why.startswith("heuristic") else ""
         console.print(f"\n[bold]Clip {i}/{len(picked)}[/bold]  {hl.fmt_ts(c.start)}–"
                       f"{hl.fmt_ts(c.end)} ({c.duration:.1f}s)  [dim]{title}[/dim]")

@@ -108,8 +108,9 @@ def make_validator(duration: float):
             elif duration and s > duration + 1:
                 errors.append(f"clip {n}: start {c.get('start')} is beyond the video length "
                               f"({fmt_ts(duration)})")
-            elif (e - s) > ec.max_clip_seconds * 1.6:
-                errors.append(f"clip {n}: {e - s:.0f}s is too long (max {ec.max_clip_seconds}s)")
+            elif (e - s) > hard_max() + 4:
+                errors.append(f"clip {n}: {e - s:.0f}s is too long; every clip must be under "
+                              f"1 minute (aim for {ec.min_clip_seconds}-{ec.max_clip_seconds}s)")
         return errors
 
     return validate
@@ -213,3 +214,30 @@ def snap(start: float, end: float, words: list[dict], window: float = 3.0) -> tu
         if w["s"] < e < w["e"]:
             e = w["e"]
     return max(0.0, s - 0.12), e + 0.35
+
+
+# ---------------------------------------------------------------- length cap
+def hard_max() -> float:
+    return float(getattr(CFG.engine_c, "hard_max_seconds", 59))
+
+
+def fit_limit(start: float, end: float, words: list[dict],
+              limit: float | None = None) -> tuple[float, float]:
+    """Keep a clip strictly under `limit` seconds (default hard_max_seconds, < 1 minute).
+
+    Trims the end back to the last sentence that finishes in time; failing that, the last whole
+    word; failing that, a hard cut. Includes the 0.35s tail padding that snap() adds.
+    """
+    limit = limit or hard_max()
+    if end - start <= limit:
+        return start, end
+    latest = start + limit - 0.35
+    in_clip = [w for w in words if w["s"] >= start - 0.2 and w["e"] <= latest]
+    sent_ends = [s.end for s in sentences(in_clip)] if in_clip else []
+    # Prefer a sentence end, as long as it keeps at least ~60% of the allowed length.
+    good = [t for t in sent_ends if t - start >= limit * 0.6 and t <= latest]
+    if good:
+        return start, min(good[-1] + 0.35, start + limit)
+    if in_clip:
+        return start, min(in_clip[-1]["e"] + 0.35, start + limit)
+    return start, start + limit

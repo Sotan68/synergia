@@ -31,14 +31,16 @@ On an NVIDIA GPU, Whisper runs on CUDA automatically and falls back to the CPU i
 ## Engines
 | Engine | Input | Output |
 |---|---|---|
-| **A** Psychology Explainer | Concept | `01_hook.png`…`04_shift.png` + `explainer.mp4` (~10s, silent) |
-| **B** Random Fact Slideshow | Hook | 6 PNGs (cover + 5 points) for a photo carousel + `slideshow.mp4` (~32s, same slides animated) |
-| **C** Podcast Clipper | YouTube URL or local `.mp4` | `clip.mp4`, a 9:16 video with the speaker centred and word-highlighted subtitles |
+| **A** Psychology Explainer | Concept | `01_hook.png`…`04_shift.png` + `explainer.mp4` (~10s, with typing sound) |
+| **B** Random Fact Slideshow | Hook | 6 PNGs (cover + 5 points) for a photo carousel + `slideshow.mp4` (~32s, same slides animated, with typing sound) |
+| **C** Podcast Clipper | YouTube URL or local `.mp4` | `clip.mp4`, a 9:16 video under 1 minute with the speaker centred and word-highlighted subtitles |
 
 - Every run is saved to `output/<engine>/<date>_<slug>/`, one folder per engine (`A - Psychology Explainer`, `B - Random Fact Slideshow`, `C - Podcast Clipper`), together with `caption.txt` (caption and hashtags) and `script.json`.
 - **Engine C:** type a range such as `12:30-13:15`, or press Enter to transcribe the whole episode and get 5 suggested moments. The suggestions come from Claude; type `s` to use the offline heuristic instead.
 - Transcripts are cached, so re-clipping the same episode is instant.
 - **Engine C credits:** for a URL, `caption.txt` gets a credit block with the channel, the video title and the link. For a local file, you're asked who to credit; press Enter to skip. The prefix is `credit_prefix` in `config.toml`.
+- **Typing sound (A and B videos):** real recorded keystrokes (`assets/sounds/keys/`, CC0) are synced to each word as it appears. To use a different keyboard, swap in your own 16-bit `.wav` files. To change or turn it off, use `[sound]` in `config.toml`.
+- **Clip length (C):** every clip stays under 1 minute. Anything longer is trimmed at the last sentence that ends in time (`hard_max_seconds`).
 - **Engines A and B:** every slide has a footer with the Overlap logo mark and the SYNERGIA wordmark. It lines up with the text: left-aligned on most slides, centred on the centred "Shift" slide.
 
 ## Customising

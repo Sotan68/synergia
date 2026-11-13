@@ -88,7 +88,7 @@ TASK: Below is a timestamped podcast transcript{src}. Find the 5 best self-conta
 to cut into vertical Shorts/Reels/TikToks.
 
 A great clip:
-- is {min_s}-{max_s} seconds long,
+- is {min_s}-{max_s} seconds long (HARD LIMIT: strictly under 60 seconds),
 - STARTS on a strong hook line (a bold claim, a question, a surprising story beat) — never mid-thought,
 - ENDS on a complete thought / punchline,
 - makes sense with zero context, and delivers psychology, life advice or a raw human experience.

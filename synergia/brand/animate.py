@@ -1,4 +1,4 @@
-"""Shared video animation for Engines A and B: word-by-word reveal per slide + crossfades."""
+"""Shared video animation for Engines A and B: word-by-word reveal, crossfades, typing sound."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,7 +6,9 @@ from pathlib import Path
 
 from PIL import Image
 
+from synergia.brand.sound import typing_track
 from synergia.brand.typography import TextLayout
+from synergia.config import CFG
 from synergia.video import FrameWriter
 
 
@@ -32,21 +34,54 @@ def _ease_out(t: float) -> float:
     return 1 - (1 - t) ** 3
 
 
+def _reveal_per_word(dur: float, total_words: int) -> float:
+    # Reveal over ~55% of the segment, but never slower than 0.22s/word.
+    window = min(dur * 0.55, total_words * 0.22)
+    return window / max(1, total_words)
+
+
+def _typing_schedule(steps: list[Step], durations: list[float],
+                     fps: int) -> tuple[list[tuple[float, str, float]], float]:
+    """(reveal time, word, slot) for every word across all steps, plus total video length."""
+    events, t_step = [], 0.0
+    for step, dur in zip(steps, durations):
+        n_frames = int(round(dur * fps))
+        words = [w.text for lay in step.layouts for w in lay.words]
+        per = _reveal_per_word(dur, len(words))
+        events += [(t_step + k * per, w, per) for k, w in enumerate(words)]
+        t_step += n_frames / fps
+    return events, t_step
+
+
 def render_video(steps: list[Step], durations: list[float], path: Path, fps: int = 30,
                  word_fade_ms: int = 120, crossfade_ms: int = 250) -> None:
     fade = word_fade_ms / 1000
     xfade_frames = max(1, int(crossfade_ms / 1000 * fps))
     W, H = steps[0].base.size
-    prev_last: Image.Image | None = None
 
-    with FrameWriter(path, W, H, fps) as fw:
+    audio, wav = None, None
+    snd = getattr(CFG, "sound", None)
+    if snd is not None and getattr(snd, "typing", False):
+        events, total = _typing_schedule(steps, durations, fps)
+        wav = typing_track(events, total, path.with_suffix(".typing.wav"),
+                           volume=getattr(snd, "typing_volume", 0.6))
+        if wav is not None:   # None when assets/sounds/keys has no samples -> silent video
+            audio = (wav, 0.0, total)
+
+    try:
+        _render_frames(steps, durations, path, fps, fade, xfade_frames, W, H, audio)
+    finally:
+        if wav is not None:
+            wav.unlink(missing_ok=True)
+
+
+def _render_frames(steps, durations, path, fps, fade, xfade_frames, W, H, audio) -> None:
+    prev_last: Image.Image | None = None
+    with FrameWriter(path, W, H, fps, audio=audio) as fw:
         for step, dur in zip(steps, durations):
             n_frames = int(round(dur * fps))
             counts = [len(l.words) for l in step.layouts]
-            total_words = sum(counts)
-            # Reveal over ~55% of the segment, but never slower than 0.22s/word.
-            window = min(dur * 0.55, total_words * 0.22)
-            per = window / max(1, total_words)
+            per = _reveal_per_word(dur, sum(counts))
             last = None
             for f in range(n_frames):
                 t = f / fps
