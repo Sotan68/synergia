@@ -1,0 +1,61 @@
+# Synergia configuration — every visual/tunable lives here. Edit freely.
+
+[brand]
+name = "SYNERGIA"
+width = 1080
+height = 1920
+background = "#0A0B1A"
+# Tints mixed into procedural backgrounds (one is picked per run).
+background_tints = ["#1A1E4A", "#241A4E", "#14234A", "#2A1C52"]
+text = "#F5F7FF"          # cool white
+accent = "#6FA8FF"        # electric blue (highlighted words)
+accent2 = "#A78BFA"       # soft purple (labels, rules, wordmark)
+muted = "#8B90B8"         # secondary text (labels, cues)
+grain = 0.025             # film-grain strength (0 = off)
+vignette = 0.55           # 0 = off, 1 = strong
+
+[fonts]
+bold = "assets/fonts/Inter-Bold.ttf"
+semibold = "assets/fonts/Inter-SemiBold.ttf"
+medium = "assets/fonts/Inter-Medium.ttf"
+black = "assets/fonts/Inter-Black.ttf"
+line_spacing = 1.2
+
+# Safe zone for TikTok / Reels / Shorts UI (pixels on the 1080x1920 canvas).
+[safe_zone]
+left = 90
+right = 930
+top = 250
+bottom = 1440
+
+[engine_a]
+fps = 30
+# Base seconds per step; scaled by word count.
+durations = [2.0, 3.5, 3.0, 2.5]
+word_fade_ms = 120
+crossfade_ms = 250
+
+[engine_b]
+also_export_4x5 = false
+
+[engine_c]
+whisper_model_gpu = "large-v3-turbo"
+whisper_model_cpu = "small"
+language = "en"
+max_download_height = 1080
+min_clip_seconds = 20
+max_clip_seconds = 75
+subtitle_y = 1300
+subtitle_font_size = 86
+words_per_group = 3
+analysis_fps = 10
+switch_hold_seconds = 1.2
+# On-screen title: shown as an intro hook at the top, then fades out (0 = keep for the whole clip).
+title_seconds = 3.5
+title_y = 270              # top edge of the title box (safe zone starts at 250)
+# Caption credit line for the original creator (channel + video title + link are filled in).
+credit_prefix = "🎙️ Credit:"
+
+[output]
+dir = "output"
+cache_dir = "cache"

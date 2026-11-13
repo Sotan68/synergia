@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Generated / downloaded (re-created by the app or setup_assets.py)
+cache/
+output/
+assets/fonts/
+assets/models/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
