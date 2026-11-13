@@ -37,6 +37,7 @@ JSON SCHEMA:
 ```json
 {{
   "concept": "{concept}",
+  "title": "post title for TikTok / Reels / Shorts: max 70 characters, curiosity hook, no hashtags, no emojis, no asterisks",
   "hook_line": "...",
   "gotcha": "...",
   "mechanism": "...",
@@ -65,6 +66,7 @@ Rules:
 JSON SCHEMA:
 ```json
 {{
+  "title": "post title for TikTok / Reels / Shorts: max 70 characters, curiosity hook, no hashtags, no emojis, no asterisks",
   "cover_title": "...",
   "cover_subtitle": "...",
   "points": [

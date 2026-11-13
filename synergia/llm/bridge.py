@@ -74,6 +74,8 @@ def normalize_common(data: dict) -> dict:
         tags = tags.split()
     data["hashtags"] = ["#" + t.lstrip("#").replace(" ", "") for t in tags if str(t).strip()]
     data["caption"] = str(data.get("caption") or "").strip()
+    # Post title (for the platform's title field): plain text, no markup.
+    data["title"] = re.sub(r"\*\*", "", str(data.get("title") or "")).strip().strip('"')
     return data
 
 

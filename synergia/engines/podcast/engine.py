@@ -140,8 +140,11 @@ def _render_one(src: Path, info: dict, name: str, c: hl.Candidate, title: str,
     _cap(c, words)
     out = run_dir("C", title or name)
     render_clip(src, info, c.start, c.end, words, out, title=title, debug=debug)
+    claude_title = c.title if c.why and not c.why.startswith("heuristic") else ""
     save_meta(out, {"source": str(src), "source_title": name, "start": c.start,
-                    "end": c.end, "title": title, "caption": c.caption,
+                    "end": c.end, "title": title,
+                    "post_title": title or claude_title or name,
+                    "caption": c.caption,
                     "credit": credit, "hashtags": c.hashtags})
     return out
 

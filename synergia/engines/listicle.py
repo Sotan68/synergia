@@ -11,7 +11,7 @@ from synergia.brand.backgrounds import make_background
 from synergia.brand.canvas import Box, draw_safe_zone, safe_for
 from synergia.brand.elements import draw_wordmark, footer_baseline
 from synergia.brand.typography import (ACCENT, ACCENT2, MUTED, TEXT, draw_gradient_text, draw_label,
-                                     font, layout_text)
+                                     font, layout_text, strip_markup)
 from synergia.config import CFG
 from synergia.llm.bridge import check_text, normalize_common, words
 from synergia.llm.prompts import listicle_prompt
@@ -40,14 +40,19 @@ def validate(data: dict) -> list[str]:
             check_text(p, "title", LIMITS["title"], e)
             check_text(p, "body", LIMITS["body"], e)
             errors += [f"point {i}: {x}" for x in e]
+    if len(str(data.get("title") or "")) > 100:
+        errors.append('"title" must be at most 100 characters')
     if not errors:
         normalize_common(data)
         data["cover_subtitle"] = str(data.get("cover_subtitle") or "").strip()
+        if not data["title"]:
+            data["title"] = strip_markup(data["cover_title"])
     return errors
 
 
 def review_fields(data: dict) -> list[tuple[str, str]]:
-    f = [("Cover title", "cover_title"), ("Cover subtitle", "cover_subtitle")]
+    f = [("Post title", "title"), ("Cover title", "cover_title"),
+         ("Cover subtitle", "cover_subtitle")]
     for i in range(5):
         f += [(f"#{i + 1} title", f"points.{i}.title"), (f"#{i + 1} body", f"points.{i}.body")]
     f.append(("Caption", "caption"))

@@ -32,13 +32,17 @@ def validate(data: dict) -> list[str]:
         errors.append('"concept" is missing')
     for k, lim in LIMITS.items():
         check_text(data, k, lim, errors)
+    if len(str(data.get("title") or "")) > 100:
+        errors.append('"title" must be at most 100 characters')
     if not errors:
         normalize_common(data)
+        if not data["title"]:
+            data["title"] = f"{strip_markup(data['concept'])}, explained in 10 seconds"
     return errors
 
 
 def review_fields(_: dict) -> list[tuple[str, str]]:
-    return [("Concept", "concept"), ("1. Hook line", "hook_line"), ("2. Gotcha", "gotcha"),
+    return [("Post title", "title"), ("Concept", "concept"), ("1. Hook line", "hook_line"), ("2. Gotcha", "gotcha"),
             ("3. Mechanism", "mechanism"), ("4. Shift", "shift"), ("Caption", "caption")]
 
 
