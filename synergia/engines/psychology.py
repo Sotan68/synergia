@@ -2,21 +2,19 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image
 
+from synergia.brand.animate import Step, full_frame, render_video, scaled_duration
 from synergia.brand.backgrounds import make_background
 from synergia.brand.canvas import SAFE, Box, draw_safe_zone
 from synergia.brand.elements import draw_wordmark
-from synergia.brand.typography import (ACCENT, ACCENT2, MUTED, TextLayout, draw_label, layout_text,
-                                       strip_markup)
+from synergia.brand.typography import ACCENT2, MUTED, draw_label, layout_text, strip_markup
 from synergia.config import CFG
 from synergia.llm.bridge import check_text, normalize_common, words
 from synergia.llm.prompts import psychology_prompt
 from synergia.output import run_dir, save_meta
-from synergia.video import FrameWriter
 
 LIMITS = {"hook_line": 10, "gotcha": 40, "mechanism": 35, "shift": 20}
 REF_WORDS = [12, 34, 30, 16]          # word counts the base durations are tuned for
@@ -45,12 +43,6 @@ def review_fields(_: dict) -> list[tuple[str, str]]:
 
 
 # ---------------------------------------------------------------- frame composition
-@dataclass
-class Step:
-    base: Image.Image            # background + static elements
-    layouts: list[TextLayout]    # text revealed word by word, in order
-
-
 def _content_box() -> Box:
     return Box(SAFE.x, SAFE.y + 130, SAFE.w, SAFE.h - 230)
 
@@ -107,63 +99,14 @@ def build_steps(data: dict, bg: Image.Image) -> list[Step]:
     return steps
 
 
-def full_frame(step: Step) -> Image.Image:
-    img = step.base
-    for lay in step.layouts:
-        img = lay.draw(img)
-    return img
-
-
 # ---------------------------------------------------------------- video
 def _durations(data: dict) -> list[float]:
     base = CFG.engine_a.durations
     out = []
     for i, key in enumerate(("hook_line", "gotcha", "mechanism", "shift")):
         n = words(data[key]) + (words(data["concept"]) if i == 0 else 0)
-        scale = min(1.45, max(0.8, n / REF_WORDS[i]))
-        out.append(base[i] * scale)
+        out.append(scaled_duration(base[i], n, REF_WORDS[i]))
     return out
-
-
-def _ease_out(t: float) -> float:
-    return 1 - (1 - t) ** 3
-
-
-def render_video(steps: list[Step], durations: list[float], path: Path) -> None:
-    a = CFG.engine_a
-    fps = a.fps
-    fade = a.word_fade_ms / 1000
-    xfade_frames = max(1, int(a.crossfade_ms / 1000 * fps))
-    W, H = CFG.brand.width, CFG.brand.height
-    prev_last: Image.Image | None = None
-
-    with FrameWriter(path, W, H, fps) as fw:
-        for step, dur in zip(steps, durations):
-            n_frames = int(round(dur * fps))
-            counts = [len(l.words) for l in step.layouts]
-            total_words = sum(counts)
-            # Reveal over ~55% of the segment, but never slower than 0.22s/word.
-            window = min(dur * 0.55, total_words * 0.22)
-            per = window / max(1, total_words)
-            last = None
-            for f in range(n_frames):
-                t = f / fps
-                img = step.base
-                k = 0
-                for lay, c in zip(step.layouts, counts):
-                    alphas, offs = [], []
-                    for _ in range(c):
-                        p = min(1.0, max(0.0, (t - k * per) / fade))
-                        e = _ease_out(p)
-                        alphas.append(e)
-                        offs.append((1 - e) * 22)
-                        k += 1
-                    img = lay.draw(img, alphas, offs)
-                if prev_last is not None and f < xfade_frames:
-                    img = Image.blend(prev_last, img, (f + 1) / (xfade_frames + 1))
-                fw.write(img)
-                last = img
-            prev_last = last
 
 
 # ---------------------------------------------------------------- produce
@@ -178,6 +121,8 @@ def produce(data: dict, debug: bool = False, video: bool = True) -> Path:
             img = draw_safe_zone(img)
         img.save(out / f"{name}.png", optimize=True)
     if video:
-        render_video(steps, _durations(data), out / "explainer.mp4")
+        a = CFG.engine_a
+        render_video(steps, _durations(data), out / "explainer.mp4", a.fps, a.word_fade_ms,
+                     a.crossfade_ms)
     save_meta(out, data)
     return out

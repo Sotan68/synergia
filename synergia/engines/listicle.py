@@ -1,4 +1,4 @@
-"""Engine B — Random Fact / Life-Advice Slideshow: cover + 5 points as 9:16 PNGs."""
+"""Engine B — Random Fact / Life-Advice Slideshow: cover + 5 points as 9:16 PNGs + an MP4."""
 from __future__ import annotations
 
 import random
@@ -6,13 +6,14 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from synergia.brand.animate import Step, full_frame, render_video, scaled_duration
 from synergia.brand.backgrounds import make_background
 from synergia.brand.canvas import Box, draw_safe_zone, safe_for
 from synergia.brand.elements import draw_wordmark, footer_baseline
 from synergia.brand.typography import (ACCENT, ACCENT2, MUTED, TEXT, draw_gradient_text, draw_label,
                                      font, layout_text)
 from synergia.config import CFG
-from synergia.llm.bridge import check_text, normalize_common
+from synergia.llm.bridge import check_text, normalize_common, words
 from synergia.llm.prompts import listicle_prompt
 from synergia.output import run_dir, save_meta
 
@@ -53,39 +54,40 @@ def review_fields(data: dict) -> list[tuple[str, str]]:
     return f
 
 
-# ---------------------------------------------------------------- rendering
-def _cover(data: dict, bg: Image.Image) -> Image.Image:
-    img = bg.copy()
-    h = img.height
-    safe = safe_for(h)
-    draw_wordmark(img)
+# ---------------------------------------------------------------- slides
+def _cover(data: dict, bg: Image.Image, swipe: bool = True) -> Step:
+    """Cover: title (+ subtitle) revealed; rule, wordmark and swipe cue are static."""
+    base = bg.copy()
+    safe = safe_for(base.height)
+    draw_wordmark(base)
     title_box = Box(safe.x, safe.y + int(safe.h * 0.14), safe.w, int(safe.h * 0.52))
     title = layout_text(data["cover_title"], title_box, weight="black", max_size=118, min_size=56,
                         valign="bottom", line_spacing=1.1)
-    img = title.draw(img)
+    layouts = [title]
     # Purple rule under title.
     y = title.top + title.height + 50
-    ImageDraw.Draw(img).rectangle([safe.x, y, safe.x + 110, y + 7], fill=ACCENT2)
+    ImageDraw.Draw(base).rectangle([safe.x, y, safe.x + 110, y + 7], fill=ACCENT2)
     if data.get("cover_subtitle"):
         sub_box = Box(safe.x, y + 50, safe.w, int(safe.h * 0.16))
-        sub = layout_text(data["cover_subtitle"], sub_box, weight="medium", max_size=54,
-                          min_size=36, valign="top", color=MUTED)
-        img = sub.draw(img)
-    label = "SWIPE  →"
-    f = font("semibold", 30)
-    width = sum(f.getlength(c) for c in label) + 30 * 0.25 * (len(label) - 1)
-    draw_label(img, label, int(safe.right - width), footer_baseline(img), size=30, color=MUTED,
-               tracking=0.25)
-    return img
+        layouts.append(layout_text(data["cover_subtitle"], sub_box, weight="medium", max_size=54,
+                                   min_size=36, valign="top", color=MUTED))
+    if swipe:  # carousel only; a video plays on by itself
+        label = "SWIPE  →"
+        f = font("semibold", 30)
+        width = sum(f.getlength(c) for c in label) + 30 * 0.25 * (len(label) - 1)
+        draw_label(base, label, int(safe.right - width), footer_baseline(base), size=30,
+                   color=MUTED, tracking=0.25)
+    return Step(base, layouts)
 
 
-def _point(i: int, p: dict, bg: Image.Image) -> Image.Image:
-    img = bg.copy()
-    safe = safe_for(img.height)
-    draw_wordmark(img)
+def _point(i: int, p: dict, bg: Image.Image) -> Step:
+    """Point slide: big gradient number is static; title then body are revealed."""
+    base = bg.copy()
+    safe = safe_for(base.height)
+    draw_wordmark(base)
     content = Box(safe.x, safe.y + 120, safe.w, safe.h - 220)
 
-    num_size = 210 if img.height == CFG.brand.height else 150
+    num_size = 210 if base.height == CFG.brand.height else 150
     gap1, gap2 = 50, 44
 
     def stack(top: int):
@@ -105,20 +107,29 @@ def _point(i: int, p: dict, bg: Image.Image) -> Image.Image:
     top = content.y + max(0, (content.h - total) // 2 - 40)
     nf, num_h, title, body, _ = stack(top)
 
-    draw_gradient_text(img, (content.x - 6, top + num_h), f"{i:02d}", nf, ACCENT, ACCENT2)
-    img = title.draw(img)
-    img = body.draw(img)
-    return img
+    draw_gradient_text(base, (content.x - 6, top + num_h), f"{i:02d}", nf, ACCENT, ACCENT2)
+    return Step(base, [title, body])
 
 
-def render(data: dict, out: Path, seed: int | None = None, debug: bool = False,
-           height: int | None = None, prefix: str = "") -> list[Path]:
-    seed = seed if seed is not None else random.randint(0, 10_000_000)
+def build_steps(data: dict, seed: int, height: int | None = None,
+                swipe: bool = True) -> list[Step]:
     h = height or CFG.brand.height
-    paths = []
+    steps = []
     for idx in range(6):
         bg = make_background(seed, CFG.brand.width, h, variant=idx)
-        img = _cover(data, bg) if idx == 0 else _point(idx, data["points"][idx - 1], bg)
+        steps.append(_cover(data, bg, swipe) if idx == 0
+                     else _point(idx, data["points"][idx - 1], bg))
+    return steps
+
+
+# ---------------------------------------------------------------- output
+def render(data: dict, out: Path, seed: int | None = None, debug: bool = False,
+           height: int | None = None, prefix: str = "") -> list[Path]:
+    """Carousel PNGs (cover + 5 points)."""
+    seed = seed if seed is not None else random.randint(0, 10_000_000)
+    paths = []
+    for idx, step in enumerate(build_steps(data, seed, height)):
+        img = full_frame(step)
         if debug:
             img = draw_safe_zone(img)
         name = f"{prefix}{idx + 1:02d}_{'cover' if idx == 0 else f'point{idx}'}.png"
@@ -128,10 +139,30 @@ def render(data: dict, out: Path, seed: int | None = None, debug: bool = False,
     return paths
 
 
+def _durations(data: dict) -> list[float]:
+    b = CFG.engine_b
+    cover_words = words(data["cover_title"]) + words(data.get("cover_subtitle", ""))
+    out = [scaled_duration(b.cover_seconds, cover_words, 10)]
+    for p in data["points"]:
+        out.append(scaled_duration(b.point_seconds, words(p["title"]) + words(p["body"]), 24))
+    return out
+
+
+def render_slideshow_video(data: dict, out: Path, seed: int) -> Path:
+    """9:16 MP4 of the same slides: word-by-word reveal per slide, crossfade between slides."""
+    b = CFG.engine_b
+    path = out / "slideshow.mp4"
+    render_video(build_steps(data, seed, swipe=False), _durations(data), path, b.fps,
+                 b.word_fade_ms, b.crossfade_ms)
+    return path
+
+
 def produce(data: dict, debug: bool = False) -> Path:
     out = run_dir("B", data["cover_title"])
     seed = random.randint(0, 10_000_000)
     render(data, out, seed, debug)
+    if getattr(CFG.engine_b, "video", True):
+        render_slideshow_video(data, out, seed)
     if CFG.engine_b.also_export_4x5:
         sub = out / "4x5"
         sub.mkdir(exist_ok=True)

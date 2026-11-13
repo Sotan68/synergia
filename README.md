@@ -32,7 +32,7 @@ On an NVIDIA GPU, Whisper runs on CUDA automatically and falls back to the CPU i
 | Engine | Input | Output |
 |---|---|---|
 | **A** Psychology Explainer | Concept | `01_hook.png`…`04_shift.png` + `explainer.mp4` (~10s, silent) |
-| **B** Random Fact Slideshow | Hook | 6 PNGs (cover + 5 points) for a photo carousel |
+| **B** Random Fact Slideshow | Hook | 6 PNGs (cover + 5 points) for a photo carousel + `slideshow.mp4` (~32s, same slides animated) |
 | **C** Podcast Clipper | YouTube URL or local `.mp4` | `clip.mp4`, a 9:16 video with the speaker centred and word-highlighted subtitles |
 
 - Every run is saved to `output/<engine>/<date>_<slug>/`, one folder per engine (`A - Psychology Explainer`, `B - Random Fact Slideshow`, `C - Podcast Clipper`), together with `caption.txt` (caption and hashtags) and `script.json`.

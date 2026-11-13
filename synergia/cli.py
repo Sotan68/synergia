@@ -62,7 +62,7 @@ def engine_b(is_demo: bool, debug: bool) -> None:
     if not hook:
         return
     data = _script_loop(listicle, hook, demo.LISTICLE if is_demo else None, f"Slideshow: {hook}")
-    with console.status("[yellow]Rendering slides…"):
+    with console.status("[yellow]Rendering slides and video…"):
         out = listicle.produce(data, debug=debug)
     _done(out)
 

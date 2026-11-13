@@ -37,6 +37,13 @@ crossfade_ms = 250
 
 [engine_b]
 also_export_4x5 = false
+video = true               # also render slideshow.mp4 (same slides, animated)
+fps = 30
+# Base seconds per slide; scaled by word count like Engine A.
+cover_seconds = 4.0
+point_seconds = 6.0
+word_fade_ms = 120
+crossfade_ms = 250
 
 [engine_c]
 whisper_model_gpu = "large-v3-turbo"
