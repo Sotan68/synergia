@@ -1,0 +1,11 @@
+Background music for Engine A/B videos. All tracks are CC0 (public domain): no attribution required.
+
+lofi-again.ogg    "Lofi again" by omfgdude
+                  https://opengameart.org/content/lofi-again
+a-cup-of-tea.mp3  "A cup of tea"  - from "lofi Compilation" by TAD
+morning-rain.mp3  "Morning rain"  - from "lofi Compilation" by TAD
+oceanside.mp3     "Oceanside"     - from "lofi Compilation" by TAD
+countryside.mp3   "Countryside"   - from "lofi Compilation" by TAD
+                  https://opengameart.org/content/lofi-compilation
+
+Add your own .mp3/.ogg/.wav/.m4a files here; one is picked at random per video.

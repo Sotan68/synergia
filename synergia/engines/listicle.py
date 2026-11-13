@@ -149,11 +149,16 @@ def _durations(data: dict) -> list[float]:
 
 
 def render_slideshow_video(data: dict, out: Path, seed: int) -> Path:
-    """9:16 MP4 of the same slides: word-by-word reveal per slide, crossfade between slides."""
+    """9:16 MP4 of the same slides: word-by-word reveal per slide, crossfade between slides.
+
+    Also records the background-music track (if any) in data["music"].
+    """
     b = CFG.engine_b
     path = out / "slideshow.mp4"
-    render_video(build_steps(data, seed, swipe=False), _durations(data), path, b.fps,
-                 b.word_fade_ms, b.crossfade_ms)
+    track = render_video(build_steps(data, seed, swipe=False), _durations(data), path, b.fps,
+                         b.word_fade_ms, b.crossfade_ms)
+    if track:
+        data["music"] = track
     return path
 
 

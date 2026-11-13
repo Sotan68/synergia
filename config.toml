@@ -29,9 +29,13 @@ top = 250
 bottom = 1440
 
 [sound]
-# Keyboard-typing sound on Engine A/B videos, synced to the word reveal (synthesised, no assets).
+# Keyboard-typing sound on Engine A/B videos, synced to the word reveal (real CC0 keystrokes in assets/sounds/keys).
 typing = true
-typing_volume = 0.4        # 0..1
+typing_volume = 0.3        # 0..1
+# Background music (CC0 tracks in music_dir; one picked at random per video, looped if short).
+music = true
+music_dir = "assets/music"
+music_volume = 0.17        # 0..1, applied after loudness normalisation
 
 [engine_a]
 fps = 30

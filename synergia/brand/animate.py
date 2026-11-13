@@ -1,4 +1,4 @@
-"""Shared video animation for Engines A and B: word-by-word reveal, crossfades, typing sound."""
+"""Shared video animation for Engines A and B: word-by-word reveal, crossfades, typing + music."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,9 +6,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from synergia.brand.sound import typing_track
+from synergia.brand.sound import build_soundtrack
 from synergia.brand.typography import TextLayout
-from synergia.config import CFG
 from synergia.video import FrameWriter
 
 
@@ -54,25 +53,22 @@ def _typing_schedule(steps: list[Step], durations: list[float],
 
 
 def render_video(steps: list[Step], durations: list[float], path: Path, fps: int = 30,
-                 word_fade_ms: int = 120, crossfade_ms: int = 250) -> None:
+                 word_fade_ms: int = 120, crossfade_ms: int = 250) -> str:
+    """Render the animated video; returns the background-music track used ("" if none)."""
     fade = word_fade_ms / 1000
     xfade_frames = max(1, int(crossfade_ms / 1000 * fps))
     W, H = steps[0].base.size
 
-    audio, wav = None, None
-    snd = getattr(CFG, "sound", None)
-    if snd is not None and getattr(snd, "typing", False):
-        events, total = _typing_schedule(steps, durations, fps)
-        wav = typing_track(events, total, path.with_suffix(".typing.wav"),
-                           volume=getattr(snd, "typing_volume", 0.6))
-        if wav is not None:   # None when assets/sounds/keys has no samples -> silent video
-            audio = (wav, 0.0, total)
+    events, total = _typing_schedule(steps, durations, fps)
+    wav, track = build_soundtrack(events, total, path.with_suffix(".audio.wav"))
+    audio = (wav, 0.0, total) if wav is not None else None   # None -> silent track
 
     try:
         _render_frames(steps, durations, path, fps, fade, xfade_frames, W, H, audio)
     finally:
         if wav is not None:
             wav.unlink(missing_ok=True)
+    return track
 
 
 def _render_frames(steps, durations, path, fps, fade, xfade_frames, W, H, audio) -> None:

@@ -94,3 +94,61 @@ def typing_track(words: list[tuple[float, str, float]], total: float, path: Path
         w.setframerate(SR)
         w.writeframes(pcm.tobytes())
     return path
+
+
+# ---------------------------------------------------------------- background music
+MUSIC_EXT = {".mp3", ".ogg", ".wav", ".m4a", ".flac"}
+
+
+def music_tracks() -> list[Path]:
+    snd = getattr(CFG, "sound", None)
+    d = CFG.root / getattr(snd, "music_dir", "assets/music")
+    return sorted(p for p in d.glob("*") if p.suffix.lower() in MUSIC_EXT) if d.is_dir() else []
+
+
+def build_soundtrack(events: list[tuple[float, str, float]], total: float,
+                     out: Path) -> tuple[Path | None, str]:
+    """Typing track + (optional) background music, mixed to one WAV.
+
+    Returns (wav path or None if there's nothing to play, music track name or "").
+    """
+    import random
+    import subprocess
+
+    from synergia.video import FFMPEG, _NOWIN
+
+    snd = getattr(CFG, "sound", None)
+    typing_on = bool(getattr(snd, "typing", False))
+    music_on = bool(getattr(snd, "music", False))
+    typing = None
+    if typing_on:
+        typing = typing_track(events, total, out.with_suffix(".keys.wav"),
+                              volume=getattr(snd, "typing_volume", 0.6))
+    tracks = music_tracks() if music_on else []
+    if not tracks:
+        return typing, ""
+
+    track = random.choice(tracks)
+    vol = float(getattr(snd, "music_volume", 0.25))
+    fade_out = min(1.5, total / 4)
+    # Loop the track if it's shorter than the video, normalise loudness, then fade in/out.
+    music = (f"[0:a]aresample=44100,aformat=channel_layouts=stereo,"
+             f"loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100,volume={vol:.3f},"
+             f"atrim=0:{total:.3f},asetpts=PTS-STARTPTS,"
+             f"afade=t=in:d=0.8,afade=t=out:st={max(0.0, total - fade_out):.3f}:d={fade_out:.3f}")
+    cmd = [FFMPEG, "-hide_banner", "-loglevel", "error", "-y",
+           "-stream_loop", "-1", "-i", str(track)]
+    if typing is not None:
+        cmd += ["-i", str(typing)]
+        fc = (f"{music}[m];[1:a]aformat=channel_layouts=stereo[k];"
+              f"[m][k]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.95[a]")
+    else:
+        fc = f"{music},alimiter=limit=0.95[a]"
+    cmd += ["-filter_complex", fc, "-map", "[a]", "-t", f"{total:.3f}",
+            "-c:a", "pcm_s16le", "-ar", "44100", str(out)]
+    r = subprocess.run(cmd, capture_output=True, text=True, creationflags=_NOWIN)
+    if typing is not None:
+        typing.unlink(missing_ok=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"Mixing background music failed: {r.stderr.strip()}")
+    return out, track.stem

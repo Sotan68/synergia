@@ -122,7 +122,9 @@ def produce(data: dict, debug: bool = False, video: bool = True) -> Path:
         img.save(out / f"{name}.png", optimize=True)
     if video:
         a = CFG.engine_a
-        render_video(steps, _durations(data), out / "explainer.mp4", a.fps, a.word_fade_ms,
-                     a.crossfade_ms)
+        track = render_video(steps, _durations(data), out / "explainer.mp4", a.fps,
+                             a.word_fade_ms, a.crossfade_ms)
+        if track:
+            data["music"] = track
     save_meta(out, data)
     return out
