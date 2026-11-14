@@ -35,12 +35,13 @@ typing_volume = 0.3        # 0..1
 # Background music (CC0 tracks in music_dir; one picked at random per video, looped if short).
 music = true
 music_dir = "assets/music"
-music_volume = 0.17        # 0..1, applied after loudness normalisation
+music_volume = 0.23        # 0..1, applied after loudness normalisation
 
 [engine_a]
 fps = 30
 # Base seconds per step; scaled by word count.
 durations = [2.0, 3.5, 3.0, 2.5]
+extra_seconds = 3.0        # added to every slide as a hold after the words are revealed
 word_fade_ms = 120
 crossfade_ms = 250
 

@@ -39,12 +39,12 @@ def _reveal_per_word(dur: float, total_words: int) -> float:
     return window / max(1, total_words)
 
 
-def _typing_schedule(steps: list[Step], durations: list[float],
-                     fps: int) -> tuple[list[tuple[float, str, float]], float]:
+def _typing_schedule(steps: list[Step], durations: list[float], fps: int,
+                     hold: float = 0.0) -> tuple[list[tuple[float, str, float]], float]:
     """(reveal time, word, slot) for every word across all steps, plus total video length."""
     events, t_step = [], 0.0
     for step, dur in zip(steps, durations):
-        n_frames = int(round(dur * fps))
+        n_frames = int(round((dur + hold) * fps))
         words = [w.text for lay in step.layouts for w in lay.words]
         per = _reveal_per_word(dur, len(words))
         events += [(t_step + k * per, w, per) for k, w in enumerate(words)]
@@ -53,29 +53,33 @@ def _typing_schedule(steps: list[Step], durations: list[float],
 
 
 def render_video(steps: list[Step], durations: list[float], path: Path, fps: int = 30,
-                 word_fade_ms: int = 120, crossfade_ms: int = 250) -> str:
-    """Render the animated video; returns the background-music track used ("" if none)."""
+                 word_fade_ms: int = 120, crossfade_ms: int = 250, hold: float = 0.0) -> str:
+    """Render the animated video; returns the background-music track used ("" if none).
+
+    hold: extra seconds each slide stays on screen after its normal duration
+    (does not change the word-reveal timing)."""
     fade = word_fade_ms / 1000
     xfade_frames = max(1, int(crossfade_ms / 1000 * fps))
     W, H = steps[0].base.size
 
-    events, total = _typing_schedule(steps, durations, fps)
+    events, total = _typing_schedule(steps, durations, fps, hold)
     wav, track = build_soundtrack(events, total, path.with_suffix(".audio.wav"))
     audio = (wav, 0.0, total) if wav is not None else None   # None -> silent track
 
     try:
-        _render_frames(steps, durations, path, fps, fade, xfade_frames, W, H, audio)
+        _render_frames(steps, durations, path, fps, fade, xfade_frames, W, H, audio, hold)
     finally:
         if wav is not None:
             wav.unlink(missing_ok=True)
     return track
 
 
-def _render_frames(steps, durations, path, fps, fade, xfade_frames, W, H, audio) -> None:
+def _render_frames(steps, durations, path, fps, fade, xfade_frames, W, H, audio,
+                   hold: float = 0.0) -> None:
     prev_last: Image.Image | None = None
     with FrameWriter(path, W, H, fps, audio=audio) as fw:
         for step, dur in zip(steps, durations):
-            n_frames = int(round(dur * fps))
+            n_frames = int(round((dur + hold) * fps))
             counts = [len(l.words) for l in step.layouts]
             per = _reveal_per_word(dur, sum(counts))
             last = None

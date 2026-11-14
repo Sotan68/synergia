@@ -127,7 +127,8 @@ def produce(data: dict, debug: bool = False, video: bool = True) -> Path:
     if video:
         a = CFG.engine_a
         track = render_video(steps, _durations(data), out / "explainer.mp4", a.fps,
-                             a.word_fade_ms, a.crossfade_ms)
+                             a.word_fade_ms, a.crossfade_ms,
+                             getattr(a, "extra_seconds", 0.0))
         if track:
             data["music"] = track
     save_meta(out, data)
