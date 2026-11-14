@@ -44,5 +44,28 @@ On an NVIDIA GPU, Whisper runs on CUDA automatically and falls back to the CPU i
 - **Clip length (C):** every clip stays under 1 minute. Anything longer is trimmed at the last sentence that ends in time (`hard_max_seconds`).
 - **Engines A and B:** every slide has a footer with the Overlap logo mark and the SYNERGIA wordmark. It lines up with the text: left-aligned on most slides, centred on the centred "Shift" slide.
 
+## Uploading to YouTube
+Synergia can upload a rendered video as a YouTube Short through the official YouTube Data API. It's free, and nothing is posted without you confirming it.
+
+**One-time setup (about 10 minutes):**
+1. Go to [console.cloud.google.com](https://console.cloud.google.com), create a project, and enable **YouTube Data API v3** (APIs & Services → Library).
+2. Under **Google Auth Platform → Branding/Audience**, configure the consent screen as **External** and add your own Google account as a **test user**.
+3. Under **Clients**, create an OAuth client of type **Desktop app**. Download its JSON and save it as `secrets/client_secret.json` (the `secrets/` folder is git-ignored).
+4. In Synergia, press **U** and pick a video. A browser opens once to sign in; the token is cached in `secrets/youtube_token.json`.
+
+**How it works:**
+- After each render you're asked whether to upload it. You can also press **U** in the menu to pick any of your recent videos (✓ marks ones already uploaded).
+- The title and description come from `caption.txt`, so edit that file to change them. The hashtags also become tags.
+- Before anything is sent, you see a preview with the title, description, tags, size, length and privacy, and you confirm it.
+- Each upload is logged to `posted.json` in the run folder, and you're warned before uploading the same video twice.
+- **Scheduling:** at "When?", press Enter to post now, type **n** for the next free posting slot, or type a time such as `tomorrow 18:00`, `fri 9:30`, `2026-12-01 08:00` or `3.12 10:00`. The video uploads straight away as private and YouTube makes it public at that time, so your PC can be off. Posting slots are `schedule_slots` in `config.toml`.
+- **Batch scheduling:** in the **U** menu, pick several videos (e.g. `1 2 3`) and answer **n**. Each video takes the next free slot, and slots that are already booked are skipped. The list shows when each scheduled video goes live.
+- Settings live in `[youtube]` in `config.toml`: privacy, category, notifying subscribers, the AI-content label, and whether to ask after each render.
+
+**Limits to know:**
+- **Videos stay private at first.** Google forces uploads from API projects that haven't been audited to private, and this probably cancels a schedule too. Synergia tells you if YouTube ignored the schedule. Until the audit, set the time in YouTube Studio (Visibility → Schedule), or apply for the [API audit](https://support.google.com/youtube/contact/yt_api_form) to lift this.
+- **About 6 uploads per day.** This limit counts uploads, not go-live times, so you can schedule 6 a day as far ahead as you like. The free quota is 10,000 units and each upload costs 1,600.
+- **Sign-in expires weekly while the app is in "Testing" mode.** Synergia simply asks you to sign in again. To stop this, set the app's publishing status to **In production** on the Audience page.
+
 ## Customising
 All brand tokens are in `config.toml`: colours, fonts, safe zone, timings, subtitle size and position, and Whisper models.

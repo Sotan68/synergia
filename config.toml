@@ -77,3 +77,17 @@ credit_prefix = "🎙️ Credit:"
 [output]
 dir = "output"
 cache_dir = "cache"
+
+[youtube]
+# Upload rendered videos as YouTube Shorts. Setup: README → "Uploading to YouTube".
+client_secret = "secrets/client_secret.json"   # OAuth "Desktop app" client from Google Cloud
+token_file = "secrets/youtube_token.json"      # written after the first sign-in
+# private / unlisted / public. API projects that haven't passed Google's audit are forced to private.
+privacy = "private"
+category_id = 27           # 27 = Education, 22 = People & Blogs, 24 = Entertainment
+language = "en"
+notify_subscribers = true
+synthetic_media = false    # YouTube's "altered or synthetic content" label: for realistic AI-made people/scenes
+ask_after_render = true    # offer an upload right after a render (only once YouTube is set up)
+# Posting times (local, 24h) used when you answer "n" to "When?": each video takes the next free one.
+schedule_slots = ["12:00", "16:00"]
