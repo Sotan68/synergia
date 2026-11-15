@@ -29,20 +29,20 @@ top = 250
 bottom = 1440
 
 [sound]
-# Keyboard-typing sound on Engine A/B videos, synced to the word reveal (real CC0 keystrokes in assets/sounds/keys).
+# Keyboard-typing sound on Engine A/B videos, synced letter-by-letter to the typed text (real CC0 keystrokes in assets/sounds/keys).
 typing = true
-typing_volume = 0.3        # 0..1
+typing_volume = 0.2        # 0..1
 # Background music (CC0 tracks in music_dir; one picked at random per video, looped if short).
 music = true
 music_dir = "assets/music"
-music_volume = 0.23        # 0..1, applied after loudness normalisation
+music_volume = 0.15       # 0..1, applied after loudness normalisation
 
 [engine_a]
 fps = 30
 # Base seconds per step; scaled by word count.
 durations = [2.0, 3.5, 3.0, 2.5]
 extra_seconds = 3.0        # added to every slide as a hold after the words are revealed
-word_fade_ms = 120
+word_fade_ms = 120         # how long each typed letter takes to fade/settle in
 crossfade_ms = 250
 
 [engine_b]
@@ -52,7 +52,7 @@ fps = 30
 # Base seconds per slide; scaled by word count like Engine A.
 cover_seconds = 4.0
 point_seconds = 6.0
-word_fade_ms = 120
+word_fade_ms = 120         # how long each typed letter takes to fade/settle in
 crossfade_ms = 250
 
 [engine_c]

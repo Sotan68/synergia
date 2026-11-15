@@ -1,8 +1,8 @@
-"""Keyboard-typing sound track, synced to the word-by-word text reveal.
+"""Keyboard-typing sound track, synced to the letter-by-letter text reveal.
 
 Uses real recorded keystrokes from assets/sounds/keys/*.wav (CC0, see LICENSE.txt there):
-each sample is trimmed to its onset and level-matched, then keys are scattered across every
-word's reveal slot with random choice, gain and a touch of stereo spread.
+each sample is trimmed to its onset and level-matched, then one key is placed on every typed
+letter/space with random choice, gain and a touch of stereo spread.
 """
 from __future__ import annotations
 
@@ -49,42 +49,37 @@ def load_keys() -> tuple[np.ndarray, ...]:
     return tuple(keys)
 
 
-def typing_track(words: list[tuple[float, str, float]], total: float, path: Path,
-                 volume: float = 0.6, seed: int = 0) -> Path | None:
+def typing_track(keys: list[tuple[float, float]], total: float, path: Path,
+                 volume: float = 0.6, seed: int = 0,
+                 min_gap: tuple[float, float] = (0.045, 0.075)) -> Path | None:
     """Write a stereo WAV of keystrokes; None if no key samples are installed.
 
-    words: (reveal_time_s, word_text, time_until_next_word_s) for every revealed word.
+    keys: (time_s, gain) for every keystroke - one per typed letter/space, at the exact moment
+    that letter appears. When letters come faster than a real typist (gap below a random
+    min_gap), keys are skipped so it stays a natural clatter instead of a buzz - every key
+    that does sound still lands exactly on a letter appearing.
     """
-    keys = load_keys()
-    if not keys:
+    samples = load_keys()
+    if not samples:
         return None
     rng = np.random.default_rng(seed)
     n = int(total * SR) + 1
     mix = np.zeros((n, 2), dtype=np.float32)
-    last = -1
+    last_k, last_t, gap = -1, -1.0, 0.0
 
-    def add(t: float, gain: float) -> None:
-        nonlocal last
-        i = int(t * SR)
-        if i >= n:
-            return
-        k = rng.integers(len(keys))
-        if k == last:                                           # no machine-gun repeats
-            k = (k + 1 + rng.integers(len(keys) - 1)) % len(keys) if len(keys) > 1 else k
-        last = k
-        seg = keys[k][: n - i] * gain
+    for t, gain in sorted(keys):
+        i = int(max(0.0, t) * SR)
+        if i >= n or t - last_t < gap:
+            continue
+        last_t, gap = t, rng.uniform(*min_gap)
+        k = int(rng.integers(len(samples)))
+        if k == last_k and len(samples) > 1:                    # no machine-gun repeats
+            k = (k + 1 + int(rng.integers(len(samples) - 1))) % len(samples)
+        last_k = k
+        seg = samples[k][: n - i] * gain
         pan = rng.uniform(-0.15, 0.15)
         mix[i:i + len(seg), 0] += seg * (1 - pan)
         mix[i:i + len(seg), 1] += seg * (1 + pan)
-
-    for t0, text, slot in words:
-        letters = sum(c.isalnum() for c in text) or 1
-        # Roughly one key per two letters, never faster than ~1 key / 55 ms.
-        count = int(max(1, min(np.ceil(letters / 2), slot / 0.055)))
-        span = slot * 0.85
-        for j in range(count):
-            jitter = rng.uniform(-0.008, 0.008) if j else 0.0
-            add(max(0.0, t0 + span * j / count + jitter), rng.uniform(0.7, 1.0))
 
     mix = np.tanh(mix * volume * 1.4) * 0.9                    # level + soft limit
     pcm = (mix * 32767).astype("<i2")
@@ -106,7 +101,7 @@ def music_tracks() -> list[Path]:
     return sorted(p for p in d.glob("*") if p.suffix.lower() in MUSIC_EXT) if d.is_dir() else []
 
 
-def build_soundtrack(events: list[tuple[float, str, float]], total: float,
+def build_soundtrack(keys: list[tuple[float, float]], total: float,
                      out: Path) -> tuple[Path | None, str]:
     """Typing track + (optional) background music, mixed to one WAV.
 
@@ -122,7 +117,7 @@ def build_soundtrack(events: list[tuple[float, str, float]], total: float,
     music_on = bool(getattr(snd, "music", False))
     typing = None
     if typing_on:
-        typing = typing_track(events, total, out.with_suffix(".keys.wav"),
+        typing = typing_track(keys, total, out.with_suffix(".keys.wav"),
                               volume=getattr(snd, "typing_volume", 0.6))
     tracks = music_tracks() if music_on else []
     if not tracks:

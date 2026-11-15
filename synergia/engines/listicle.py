@@ -154,7 +154,7 @@ def _durations(data: dict) -> list[float]:
 
 
 def render_slideshow_video(data: dict, out: Path, seed: int) -> Path:
-    """9:16 MP4 of the same slides: word-by-word reveal per slide, crossfade between slides.
+    """9:16 MP4 of the same slides: letter-by-letter typing per slide, crossfade between slides.
 
     Also records the background-music track (if any) in data["music"].
     """

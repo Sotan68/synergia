@@ -1,4 +1,4 @@
-"""Engine A — 10-Second Psychology Explainer: 4 PNG frames + ~11s 9:16 MP4 with word-by-word reveal."""
+"""Engine A — 10-Second Psychology Explainer: 4 PNG frames + ~11s 9:16 MP4 with letter-by-letter typing."""
 from __future__ import annotations
 
 import random

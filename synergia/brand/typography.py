@@ -78,6 +78,7 @@ class TextLayout:
     color: tuple[int, int, int] = TEXT
     accent_color: tuple[int, int, int] = ACCENT
     _sprites: dict = field(default_factory=dict, repr=False)
+    _edges: dict = field(default_factory=dict, repr=False)
 
     @property
     def font(self) -> ImageFont.FreeTypeFont:
@@ -99,6 +100,53 @@ class TextLayout:
                 x += f.getlength(text)
             self._sprites[i] = (im, w.x - 4, w.y - asc - 4)
         return self._sprites[i]
+
+    def char_edges(self, i: int) -> list[int]:
+        """x boundaries (sprite coords) of each character of word i: len(text) + 1 values."""
+        if i not in self._edges:
+            spr, _, _ = self.sprite(i)
+            f = self.font
+            edges, x0 = [0], 4.0
+            for text, _ in self.words[i].runs:
+                for k in range(1, len(text) + 1):
+                    edges.append(max(edges[-1], int(round(x0 + f.getlength(text[:k])))))
+                x0 += f.getlength(text)
+            edges[-1] = spr.width
+            self._edges[i] = edges
+        return self._edges[i]
+
+    def draw_typed(self, img: Image.Image, char_alphas: list[list[float]],
+                   rise: float = 14.0) -> Image.Image:
+        """Composite words letter by letter. char_alphas[i][c] is the eased 0..1 reveal of
+        character c of word i; each letter fades in and settles up from `rise` px below.
+
+        Letters are vertical slices of the word sprite, so a fully revealed word is
+        pixel-identical to draw()."""
+        base = img.convert("RGBA")
+        for i, ca in enumerate(char_alphas):
+            if not ca or ca[0] <= 0:
+                continue
+            spr, x, y = self.sprite(i)
+            if ca[-1] >= 1:
+                base.alpha_composite(spr, (x, y))
+                continue
+            edges = self.char_edges(i)
+            done = 0                                   # leading fully-revealed letters
+            while done < len(ca) and ca[done] >= 1:
+                done += 1
+            if done:
+                base.alpha_composite(spr.crop((0, 0, edges[done], spr.height)), (x, y))
+            for c in range(done, len(ca)):
+                a = ca[c]
+                if a <= 0:
+                    break
+                x0, x1 = edges[c], edges[c + 1]
+                if x1 <= x0:
+                    continue
+                piece = spr.crop((x0, 0, x1, spr.height))
+                piece.putalpha(piece.getchannel("A").point(lambda v, a=a: int(v * a)))
+                base.alpha_composite(piece, (x + x0, y + int(round((1 - a) * rise))))
+        return base.convert("RGB")
 
     def draw(self, img: Image.Image, alphas: list[float] | None = None,
              offsets: list[float] | None = None) -> Image.Image:
