@@ -129,3 +129,90 @@ Fix ONLY these problems and reply again with ONE ```json code block (same schema
 
 Previous reply:
 {previous[:6000]}"""
+
+
+SELF_ID_RULES = """Register: entertainment and self-recognition, not diagnosis. Relatable, specific, a little
+uncomfortably accurate. Never medical or clinical claims, never labels like disorders, never
+anything that could shame someone. Concrete everyday details beat abstract traits."""
+
+
+def checklist_prompt(topic: str, n: int) -> str:
+    return f"""{BRAND_VOICE}
+
+TASK: Write a "How many apply to you?" checklist video about: "{topic}"
+Viewers count how many of the signs fit them and comment their score.
+
+{SELF_ID_RULES}
+
+Rules:
+- cover_title: starts with the number {n}, max 12 words, e.g. "{n} signs you're a **high-functioning overthinker**".
+- signs: exactly {n} items, each max 9 words, written in second person as a habit or moment
+  ("You rehearse phone calls before making them"). No numbering, no ending period needed.
+- Order them from most common to most specific, so the last ones feel like "how did they know".
+
+{JSON_RULES}
+
+JSON SCHEMA:
+```json
+{{
+  "title": "post title for TikTok / Reels / Shorts: max 70 characters, curiosity hook, no hashtags, no emojis, no asterisks",
+  "cover_title": "...",
+  "signs": ["...", "..."],
+  "caption": "1 sentence that asks for their score in the comments (no hashtags)",
+  "hashtags": ["#psychology", "...", "5-8 relevant hashtags"]
+}}
+```"""
+
+
+def pick_prompt(topic: str, n: int) -> str:
+    return f"""{BRAND_VOICE}
+
+TASK: Write a "Pick one" reveal video about: "{topic}"
+The viewer sees {n} options, picks one, then each option reveals what it says about them.
+
+{SELF_ID_RULES}
+
+Rules:
+- style: how the options look. One of "numbers", "colours", "shapes", "doors" - pick what fits the topic best.
+  For "colours" give every option a "color" (hex like "#4F8CFF", clearly different from each other, readable on a dark background).
+  For "shapes" give every option a "shape": one of circle, triangle, square, star, hexagon, diamond (all different).
+- cover_title: the setup, max 12 words, e.g. "Pick a **door**. It reveals your hidden strength."
+- options: exactly {n}. "label" max 3 words (e.g. "Door 1", "Ocean blue", "The triangle").
+  "trait" max 25 words: what picking it says about them - flattering but specific, so people share it.
+
+{JSON_RULES}
+
+JSON SCHEMA:
+```json
+{{
+  "title": "post title for TikTok / Reels / Shorts: max 70 characters, curiosity hook, no hashtags, no emojis, no asterisks",
+  "cover_title": "...",
+  "style": "numbers",
+  "options": [
+    {{"label": "...", "trait": "...", "color": "#hex (colours only)", "shape": "(shapes only)"}}
+  ],
+  "caption": "1 sentence that asks which one they picked (no hashtags)",
+  "hashtags": ["#personalitytest", "...", "5-8 relevant hashtags"]
+}}
+```"""
+
+
+def topics_prompt(mode: str, past: list[str]) -> str:
+    kind = ('"How many apply to you?" checklists (e.g. "signs you\'re a high-functioning overthinker")'
+            if mode == "checklist" else
+            '"Pick one" personality reveals (e.g. "pick a door to reveal your hidden strength")')
+    avoid = "\n".join(f"- {t}" for t in past[:40]) or "- (none yet)"
+    return f"""{BRAND_VOICE}
+
+TASK: Suggest 10 fresh topics for {kind}.
+Topics should be about psychology, relationships, habits, work, friendship, self-image - things
+people instantly recognise themselves in and want to comment on. Mix light and deep.
+{SELF_ID_RULES}
+
+Do NOT repeat or closely paraphrase these topics already used:
+{avoid}
+
+Reply with ONE ```json code block and nothing else. Valid JSON only.
+```json
+{{"topics": ["...", "... 10 short topics, max 10 words each"]}}
+```"""

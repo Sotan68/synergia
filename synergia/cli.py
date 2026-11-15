@@ -13,6 +13,7 @@ from rich.prompt import Confirm, Prompt
 from synergia import demo
 from synergia.config import CFG
 from synergia.engines import listicle, psychology
+from synergia.brand.typography import strip_markup
 from synergia.llm.bridge import Cancelled, ask_claude, review
 from synergia.video import have_ffmpeg
 
@@ -247,27 +248,86 @@ def engine_c(debug: bool) -> None:
     _done(engine.run(inp, debug=debug))
 
 
+def engine_d(debug: bool) -> None:
+    from synergia.engines import brain
+
+    with console.status("[yellow]Generating rounds and rendering the video…"):
+        out = brain.produce(debug=debug)
+    _done(out)
+
+
+def _pick_topic(mode: str) -> str:
+    """Ask for a topic; Enter asks Claude for 10 fresh ones (avoiding past topics)."""
+    from synergia import history
+    from synergia.llm.prompts import topics_prompt
+
+    example = ("signs you're a high-functioning overthinker" if mode == "checklist" else
+               "pick a door to reveal your hidden strength")
+    topic = Prompt.ask(f"[bold]Topic[/bold] [dim](e.g. {example}; Enter = suggest 10)[/dim]",
+                       default="", show_default=False).strip()
+    if topic:
+        return topic
+
+    def check(d: dict) -> list[str]:
+        t = d.get("topics")
+        if not isinstance(t, list) or len([x for x in t if str(x).strip()]) < 5:
+            return ['"topics" must be a list of about 10 short strings']
+        d["topics"] = [str(x).strip() for x in t if str(x).strip()][:10]
+        return []
+
+    topics = ask_claude(topics_prompt(mode, history.recent("identity.topics")), check,
+                        title="Topic ideas")["topics"]
+    for i, t in enumerate(topics, 1):
+        console.print(f"  [#8FA8FF]{i:>2}[/#8FA8FF] {escape(t)}")
+    raw = Prompt.ask("Number, or type your own", default="1").strip()
+    return topics[int(raw) - 1] if raw.isdigit() and 1 <= int(raw) <= len(topics) else raw
+
+
+def engine_e(is_demo: bool, debug: bool) -> None:
+    from synergia.engines import identity
+
+    console.print("[bold]Format:[/bold]  [#8FA8FF]1[/#8FA8FF] How many apply to you?   "
+                  "[#8FA8FF]2[/#8FA8FF] Pick one → reveal")
+    raw = Prompt.ask(">", default="1", show_default=False).strip().lower()
+    if raw in ("b", "q"):
+        return
+    mode = "pick" if raw == "2" else "checklist"
+    eng = identity.Pick if mode == "pick" else identity.Checklist
+    demo_data = (demo.PICK if mode == "pick" else demo.CHECKLIST) if is_demo else None
+    topic = strip_markup(demo_data["cover_title"]) if demo_data else _pick_topic(mode)
+    if not topic:
+        return
+    data = _script_loop(eng, topic, demo_data, f"Which One Are You: {topic}")
+    data["topic"] = topic
+    with console.status("[yellow]Rendering slides and video…"):
+        produce = identity.produce_pick if mode == "pick" else identity.produce_checklist
+        out = produce(data, debug=debug)
+    _done(out)
+
+
 def main(is_demo: bool = False, debug: bool = False) -> None:
     console.print(Panel(BANNER, border_style="#8FA8FF", expand=False, padding=(1, 4)))
     if not have_ffmpeg():
         console.print("[red]ffmpeg/ffprobe not found on PATH. Install ffmpeg and retry.[/red]")
         return
     if is_demo:
-        console.print("[dim]Demo mode: Engines A/B use built-in sample scripts (no Claude round-trip).[/dim]")
+        console.print("[dim]Demo mode: Engines A/B/E use built-in sample scripts (no Claude round-trip).[/dim]")
     while True:
         console.print("\n[bold]Choose your Engine:[/bold]  "
                       "[#8FA8FF]\\[A][/#8FA8FF] Psychology Explainer   "
                       "[#8FA8FF]\\[B][/#8FA8FF] Random Fact Slideshow   "
                       "[#8FA8FF]\\[C][/#8FA8FF] Podcast Clipper   "
+                      "[#8FA8FF]\\[D][/#8FA8FF] Brain Test   "
+                      "[#8FA8FF]\\[E][/#8FA8FF] Which One Are You   "
                       "[#8FA8FF]\\[U][/#8FA8FF] Upload to YouTube   "
                       "[dim]\\[Q] Quit[/dim]")
         try:
             raw = Prompt.ask(">", default="", show_default=False)
         except EOFError:
             return
-        letters = [ch for ch in raw.lower() if ch in "abcuq"]
+        letters = [ch for ch in raw.lower() if ch in "abcdeuq"]
         if not letters:
-            console.print("[dim]Type A, B, C, U or Q.[/dim]")
+            console.print("[dim]Type A, B, C, D, E, U or Q.[/dim]")
             continue
         choice = letters[0]
         if choice == "q":
@@ -277,6 +337,10 @@ def main(is_demo: bool = False, debug: bool = False) -> None:
                 engine_a(is_demo, debug)
             elif choice == "b":
                 engine_b(is_demo, debug)
+            elif choice == "d":
+                engine_d(debug)
+            elif choice == "e":
+                engine_e(is_demo, debug)
             elif choice == "u":
                 upload_menu()
             else:

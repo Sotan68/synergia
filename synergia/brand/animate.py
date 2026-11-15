@@ -1,11 +1,13 @@
-"""Shared video animation for Engines A and B: letter-by-letter typing, crossfades, typing + music.
+"""Shared video animation for Engines A, B, D and E: letter-by-letter typing, crossfades,
+per-frame overlays (timers, games, checkmarks), typing + sound effects + music.
 
 One typing plan per slide drives both the picture and the sound: every letter (and every space)
 gets a time, the letter fades/settles in from that moment and a keystroke is placed on it.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -16,16 +18,34 @@ from synergia.brand.typography import TextLayout
 from synergia.video import FrameWriter
 
 
+Overlay = Callable[[Image.Image, float], Image.Image]
+FINAL = 1e9                      # overlay time meaning "the end state" (for still PNGs)
+
+
 @dataclass
 class Step:
     base: Image.Image            # background + static elements
-    layouts: list[TextLayout]    # text typed letter by letter, in order
+    layouts: list[TextLayout] = field(default_factory=list)   # typed letter by letter, in order
+    # Drawn on top of the typed text every frame: overlay(img, seconds_into_step) -> img.
+    # Must accept FINAL and then draw its end state.
+    overlay: Overlay | None = None
+    sfx: list[tuple[float, str]] = field(default_factory=list)  # (seconds into step, effect)
+    # Exact typing timing (seconds into the step); None = automatic pacing.
+    type_start: float | None = None
+    type_window: float | None = None
+
+    @property
+    def type_end(self) -> float:
+        """When the last letter starts appearing (only meaningful with explicit timing)."""
+        return (self.type_start or 0.0) + (self.type_window or 0.0)
 
 
 def full_frame(step: Step) -> Image.Image:
     img = step.base
     for lay in step.layouts:
         img = lay.draw(img)
+    if step.overlay is not None:
+        img = step.overlay(img, FINAL)
     return img
 
 
@@ -75,7 +95,10 @@ def _plan_step(step: Step, dur: float, lead: float, rng: np.random.Generator) ->
     units = np.array([u for u, *_ in seq]) * rng.uniform(0.7, 1.3, len(seq))
     pauses = np.array([p for _, p, *_ in seq])
     # ~0.22 s per word, using at most ~65% of the slide's (pre-hold) duration.
-    window = min(dur * 0.65, n_words * 0.22)
+    window = (step.type_window if step.type_window is not None
+              else min(dur * 0.65, n_words * 0.22))
+    if step.type_start is not None:
+        lead = step.type_start
     if pauses.sum() > window * _PAUSE_SHARE:
         pauses *= window * _PAUSE_SHARE / pauses.sum()
     per_unit = (window - pauses.sum()) / max(units.sum(), 1e-9)
@@ -104,7 +127,7 @@ def render_video(steps: list[Step], durations: list[float], path: Path, fps: int
     lead = min(0.15, crossfade_ms / 2000)        # start typing as the crossfade settles
 
     rng = np.random.default_rng()
-    plans, keys, t_step = [], [], 0.0
+    plans, keys, sfx, t_step = [], [], [], 0.0
     # Keys sound half a frame after the letter's time: a letter shows on the first frame at or
     # after its time (0..1 frame later), so this keeps audio within +-half a frame of the picture.
     sync = 0.5 / fps
@@ -112,10 +135,11 @@ def render_video(steps: list[Step], durations: list[float], path: Path, fps: int
         plan = _plan_step(step, dur, lead, rng)
         plans.append(plan)
         keys += [(t_step + k + sync, g) for k, g in plan.keys]
+        sfx += [(t_step + t + sync, name) for t, name in step.sfx]
         t_step += int(round((dur + hold) * fps)) / fps
     total = t_step
 
-    wav, track = build_soundtrack(keys, total, path.with_suffix(".audio.wav"))
+    wav, track = build_soundtrack(keys, total, path.with_suffix(".audio.wav"), sfx)
     audio = (wav, 0.0, total) if wav is not None else None   # None -> silent track
 
     try:
@@ -139,7 +163,10 @@ def _render_frames(steps, durations, plans, path, fps, fade, xfade_frames, W, H,
             for f in range(n_frames):
                 t = f / fps
                 if t >= end:
-                    done = done or full_frame(step)
+                    if done is None:
+                        done = step.base
+                        for lay in step.layouts:
+                            done = lay.draw(done)
                     img = done
                 else:
                     img = step.base
@@ -147,6 +174,8 @@ def _render_frames(steps, durations, plans, path, fps, fade, xfade_frames, W, H,
                         alphas = [[_ease_out(min(1.0, max(0.0, (t - ct) / fade))) for ct in w]
                                   for w in ltimes]
                         img = lay.draw_typed(img, alphas)
+                if step.overlay is not None:
+                    img = step.overlay(img, t)
                 if prev_last is not None and f < xfade_frames:
                     img = Image.blend(prev_last, img, (f + 1) / (xfade_frames + 1))
                 fw.write(img)

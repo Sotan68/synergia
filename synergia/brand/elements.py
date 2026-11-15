@@ -86,3 +86,99 @@ def draw_wordmark(img: Image.Image, align: str = "left") -> None:
     img.paste(mark, (x, cap_mid - mark.height // 2), mark)
     draw_label(img, name, x + mark.width + gap, baseline, size=WORDMARK_SIZE, color=ACCENT2,
                weight="semibold", tracking=WORDMARK_TRACKING)
+
+
+# ---------------------------------------------------------------- animated pieces (D / E)
+SS = 4   # supersampling factor for smooth arcs and strokes
+
+
+def _rgba(col, alpha: float = 1.0) -> tuple[int, int, int, int]:
+    return tuple(col[:3]) + (int(255 * max(0.0, min(1.0, alpha))),)
+
+
+def _patch(img: Image.Image, x0: int, y0: int, w: int, h: int, draw_fn) -> Image.Image:
+    """Run draw_fn(ImageDraw, scale) on a supersampled transparent patch and composite it.
+
+    An RGBA img is drawn on in place (and returned); an RGB img is left untouched and a new
+    RGB image is returned."""
+    layer = Image.new("RGBA", (w * SS, h * SS), (0, 0, 0, 0))
+    draw_fn(ImageDraw.Draw(layer), SS)
+    layer = layer.resize((w, h), Image.LANCZOS)
+    if img.mode == "RGBA":
+        img.alpha_composite(layer, (x0, y0))
+        return img
+    out = img.convert("RGBA")
+    out.alpha_composite(layer, (x0, y0))
+    return out.convert("RGB")
+
+
+def draw_timer(img: Image.Image, cx: int, cy: int, r: int, frac: float, secs_left: int,
+               alpha: float = 1.0) -> Image.Image:
+    """Countdown ring: a track plus an accent arc covering `frac` (1 -> 0) and the seconds left."""
+    from synergia.brand.typography import ACCENT, MUTED, TEXT, font
+
+    width = max(6, r // 6)
+    pad = width + 4
+    size = 2 * (r + pad)
+
+    def draw(d: ImageDraw.ImageDraw, s: int) -> None:
+        box = [pad * s, pad * s, (pad + 2 * r) * s, (pad + 2 * r) * s]
+        d.ellipse(box, outline=_rgba(MUTED, 0.28 * alpha), width=width * s)
+        if frac > 0:
+            col = ACCENT if frac > 0.34 else MARK_PURPLE
+            d.arc(box, -90, -90 + 360 * frac, fill=_rgba(col, alpha), width=width * s)
+        f = font("black", int(r * 0.95) * s)
+        d.text((size * s / 2, size * s / 2), str(secs_left), font=f, fill=_rgba(TEXT, alpha),
+               anchor="mm")
+
+    return _patch(img, cx - size // 2, cy - size // 2, size, size, draw)
+
+
+def draw_ring(img: Image.Image, cx: int, cy: int, r: int, progress: float,
+              color=None, width: int = 9) -> Image.Image:
+    """'Found it' circle that draws itself in clockwise (progress 0..1)."""
+    if progress <= 0:
+        return img
+    from synergia.brand.typography import ACCENT
+    col = color or ACCENT
+    pad = width + 4
+    size = 2 * (r + pad)
+
+    def draw(d: ImageDraw.ImageDraw, s: int) -> None:
+        box = [pad * s, pad * s, (pad + 2 * r) * s, (pad + 2 * r) * s]
+        d.arc(box, -120, -120 + 360 * min(1.0, progress), fill=_rgba(col), width=width * s)
+
+    return _patch(img, cx - size // 2, cy - size // 2, size, size, draw)
+
+
+def draw_check(img: Image.Image, x: int, y: int, size: int, progress: float,
+               alpha: float = 1.0) -> Image.Image:
+    """Checkbox at (x, y) top-left; progress 0 = empty box, 1 = filled with a full tick."""
+    from synergia.brand.typography import ACCENT, BG_DARK, MUTED
+
+    p = max(0.0, min(1.0, progress))
+    pad = 4
+
+    def draw(d: ImageDraw.ImageDraw, s: int) -> None:
+        box = [pad * s, pad * s, (pad + size) * s, (pad + size) * s]
+        rad = size * 0.24 * s
+        fill = _rgba(ACCENT, alpha * min(1.0, p * 2.5)) if p > 0 else None
+        d.rounded_rectangle(box, rad, fill=fill,
+                            outline=_rgba(ACCENT if p > 0 else MUTED, alpha), width=max(3, size // 14) * s)
+        if p > 0.15:   # the tick draws along its two strokes
+            q = (p - 0.15) / 0.85
+            pts = [(0.26, 0.53), (0.44, 0.71), (0.77, 0.32)]
+            pts = [((pad + size * a) * s, (pad + size * b) * s) for a, b in pts]
+            l1 = ((pts[1][0] - pts[0][0]) ** 2 + (pts[1][1] - pts[0][1]) ** 2) ** 0.5
+            l2 = ((pts[2][0] - pts[1][0]) ** 2 + (pts[2][1] - pts[1][1]) ** 2) ** 0.5
+            reach = q * (l1 + l2)
+            line = [pts[0]]
+            if reach <= l1:
+                k = reach / l1
+                line.append((pts[0][0] + (pts[1][0] - pts[0][0]) * k, pts[0][1] + (pts[1][1] - pts[0][1]) * k))
+            else:
+                k = (reach - l1) / l2
+                line += [pts[1], (pts[1][0] + (pts[2][0] - pts[1][0]) * k, pts[1][1] + (pts[2][1] - pts[1][1]) * k)]
+            d.line(line, fill=_rgba(BG_DARK, alpha), width=max(4, size // 8) * s, joint="curve")
+
+    return _patch(img, x - pad, y - pad, size + 2 * pad, size + 2 * pad, draw)

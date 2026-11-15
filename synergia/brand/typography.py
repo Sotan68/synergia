@@ -14,6 +14,7 @@ TEXT = hex_to_rgb(CFG.brand.text)
 ACCENT = hex_to_rgb(CFG.brand.accent)
 ACCENT2 = hex_to_rgb(CFG.brand.accent2)
 MUTED = hex_to_rgb(CFG.brand.muted)
+BG_DARK = hex_to_rgb(CFG.brand.background)
 
 
 @lru_cache(maxsize=256)

@@ -31,3 +31,33 @@ LISTICLE = {
     "caption": "Save this for the version of you that needs to read it at 30.",
     "hashtags": ["#lifeadvice", "#regret", "#twenties", "#growth", "#mindset"],
 }
+
+CHECKLIST = {
+    "title": "7 signs you're a high-functioning overthinker",
+    "cover_title": "7 signs you're a **high-functioning overthinker**",
+    "signs": [
+        "You rehearse phone calls before making them",
+        "You reread your texts after sending them",
+        "You plan conversations that never happen",
+        "You notice when someone's tone changes slightly",
+        "You replay compliments less than criticism",
+        "You have three backup plans for weekend plans",
+        "You look calm while your mind runs a marathon",
+    ],
+    "caption": "Be honest: how many did you check?",
+    "hashtags": ["#overthinking", "#psychology", "#relatable", "#selfawareness", "#mindset"],
+}
+
+PICK = {
+    "title": "Pick a door. It reveals your hidden strength",
+    "cover_title": "Pick a **door**. It reveals your hidden strength.",
+    "style": "doors",
+    "options": [
+        {"label": "Door 1", "trait": "You see what others miss. People come to you when something feels off, because you **always notice first**."},
+        {"label": "Door 2", "trait": "You stay calm when everything burns. Your quiet is the reason people **feel safe** around you."},
+        {"label": "Door 3", "trait": "You start over without asking permission. Every ending you survived made you **harder to break**."},
+        {"label": "Door 4", "trait": "You make people feel understood in minutes. That's rare. Most people **never learn it**."},
+    ],
+    "caption": "Which door did you pick? Tell me below.",
+    "hashtags": ["#personalitytest", "#psychology", "#pickone", "#selfgrowth", "#mindset"],
+}

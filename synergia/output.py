@@ -15,7 +15,8 @@ def slugify(text: str, max_len: int = 48) -> str:
     return s[:max_len].rstrip("-") or "post"
 
 
-ENGINE_NAMES = {"A": "Psychology Explainer", "B": "Random Fact Slideshow", "C": "Podcast Clipper"}
+ENGINE_NAMES = {"A": "Psychology Explainer", "B": "Random Fact Slideshow", "C": "Podcast Clipper",
+                "D": "Brain Test", "E": "Which One Are You"}
 
 
 def run_dir(engine: str, title: str) -> Path:

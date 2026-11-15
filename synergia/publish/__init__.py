@@ -14,7 +14,7 @@ from pathlib import Path
 from synergia.config import CFG
 
 # The video each engine renders, in lookup order.
-VIDEO_NAMES = ("explainer.mp4", "slideshow.mp4", "clip.mp4")
+VIDEO_NAMES = ("explainer.mp4", "slideshow.mp4", "clip.mp4", "brain_test.mp4", "identity.mp4")
 LEDGER = "posted.json"
 
 

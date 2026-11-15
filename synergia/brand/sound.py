@@ -1,4 +1,4 @@
-"""Keyboard-typing sound track, synced to the letter-by-letter text reveal.
+"""Keyboard-typing + sound-effects track, synced to the letter-by-letter text reveal.
 
 Uses real recorded keystrokes from assets/sounds/keys/*.wav (CC0, see LICENSE.txt there):
 each sample is trimmed to its onset and level-matched, then one key is placed on every typed
@@ -49,25 +49,28 @@ def load_keys() -> tuple[np.ndarray, ...]:
     return tuple(keys)
 
 
-def typing_track(keys: list[tuple[float, float]], total: float, path: Path,
-                 volume: float = 0.6, seed: int = 0,
-                 min_gap: tuple[float, float] = (0.045, 0.075)) -> Path | None:
-    """Write a stereo WAV of keystrokes; None if no key samples are installed.
+def effects_track(keys: list[tuple[float, float]], sfx: list[tuple[float, str]], total: float,
+                  path: Path, volume: float = 0.6, sfx_volume: float = 0.5, seed: int = 0,
+                  min_gap: tuple[float, float] = (0.045, 0.075)) -> Path | None:
+    """Write a stereo WAV of keystrokes + sound effects; None if there is nothing to play.
 
     keys: (time_s, gain) for every keystroke - one per typed letter/space, at the exact moment
     that letter appears. When letters come faster than a real typist (gap below a random
     min_gap), keys are skipped so it stays a natural clatter instead of a buzz - every key
     that does sound still lands exactly on a letter appearing.
+    sfx: (time_s, name) for procedural effects (see synergia.brand.sfx).
     """
-    samples = load_keys()
-    if not samples:
+    from synergia.brand.sfx import effect
+
+    samples = load_keys() if keys else ()
+    if not samples and not sfx:
         return None
     rng = np.random.default_rng(seed)
     n = int(total * SR) + 1
     mix = np.zeros((n, 2), dtype=np.float32)
-    last_k, last_t, gap = -1, -1.0, 0.0
 
-    for t, gain in sorted(keys):
+    last_k, last_t, gap = -1, -1.0, 0.0
+    for t, gain in sorted(keys) if samples else ():
         i = int(max(0.0, t) * SR)
         if i >= n or t - last_t < gap:
             continue
@@ -80,8 +83,18 @@ def typing_track(keys: list[tuple[float, float]], total: float, path: Path,
         pan = rng.uniform(-0.15, 0.15)
         mix[i:i + len(seg), 0] += seg * (1 - pan)
         mix[i:i + len(seg), 1] += seg * (1 + pan)
+    mix *= volume * 1.4
 
-    mix = np.tanh(mix * volume * 1.4) * 0.9                    # level + soft limit
+    fx = np.zeros(n, dtype=np.float32)
+    for t, name in sfx:
+        i = int(max(0.0, t) * SR)
+        if i >= n:
+            continue
+        seg = effect(name)[: n - i]
+        fx[i:i + len(seg)] += seg
+    mix += (fx * sfx_volume)[:, None]
+
+    mix = np.tanh(mix) * 0.9                                   # soft limit
     pcm = (mix * 32767).astype("<i2")
     with wave.open(str(path), "wb") as w:
         w.setnchannels(2)
@@ -101,9 +114,9 @@ def music_tracks() -> list[Path]:
     return sorted(p for p in d.glob("*") if p.suffix.lower() in MUSIC_EXT) if d.is_dir() else []
 
 
-def build_soundtrack(keys: list[tuple[float, float]], total: float,
-                     out: Path) -> tuple[Path | None, str]:
-    """Typing track + (optional) background music, mixed to one WAV.
+def build_soundtrack(keys: list[tuple[float, float]], total: float, out: Path,
+                     sfx: list[tuple[float, str]] | None = None) -> tuple[Path | None, str]:
+    """Typing + sound-effects track and (optional) background music, mixed to one WAV.
 
     Returns (wav path or None if there's nothing to play, music track name or "").
     """
@@ -115,10 +128,10 @@ def build_soundtrack(keys: list[tuple[float, float]], total: float,
     snd = getattr(CFG, "sound", None)
     typing_on = bool(getattr(snd, "typing", False))
     music_on = bool(getattr(snd, "music", False))
-    typing = None
-    if typing_on:
-        typing = typing_track(keys, total, out.with_suffix(".keys.wav"),
-                              volume=getattr(snd, "typing_volume", 0.6))
+    typing = effects_track(keys if typing_on else [], sfx or [], total,
+                           out.with_suffix(".keys.wav"),
+                           volume=getattr(snd, "typing_volume", 0.6),
+                           sfx_volume=getattr(snd, "sfx_volume", 0.5))
     tracks = music_tracks() if music_on else []
     if not tracks:
         return typing, ""

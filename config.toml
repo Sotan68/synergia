@@ -36,6 +36,7 @@ typing_volume = 0.2        # 0..1
 music = true
 music_dir = "assets/music"
 music_volume = 0.15       # 0..1, applied after loudness normalisation
+sfx_volume = 0.5           # 0..1, timer ticks / dings / pops in Engines D and E
 
 [engine_a]
 fps = 30
@@ -53,6 +54,24 @@ fps = 30
 cover_seconds = 4.0
 point_seconds = 6.0
 word_fade_ms = 120         # how long each typed letter takes to fade/settle in
+crossfade_ms = 250
+
+[engine_d]
+# Brain Test: procedurally generated mini-games, no Claude needed.
+fps = 30
+rounds = [3, 4]            # min, max rounds per video (random in between)
+timer_seconds = 4          # answer countdown in each round
+memory_seconds = 3         # how long the Memory test shows its words
+max_seconds = 50           # drop a middle round if a video would run longer
+word_fade_ms = 120
+crossfade_ms = 250
+
+[engine_e]
+# Which One Are You: "How many apply to you?" checklists and "Pick one" reveals, written by Claude.
+fps = 30
+pick_timer_seconds = 3     # "Pick one" countdown before the reveals
+reveal_seconds = 2.2       # hold after each reveal finishes typing
+word_fade_ms = 120
 crossfade_ms = 250
 
 [engine_c]
