@@ -11,6 +11,7 @@ from synergia.brand.backgrounds import make_background
 from synergia.brand.canvas import SAFE, Box, draw_safe_zone
 from synergia.brand.elements import draw_wordmark
 from synergia.brand.typography import ACCENT2, MUTED, draw_label, layout_text, strip_markup
+from synergia import history
 from synergia.config import CFG
 from synergia.llm.bridge import check_text, normalize_common, words
 from synergia.llm.prompts import psychology_prompt
@@ -131,5 +132,6 @@ def produce(data: dict, debug: bool = False, video: bool = True) -> Path:
                              getattr(a, "extra_seconds", 0.0))
         if track:
             data["music"] = track
+    history.remember("psychology.concepts", [strip_markup(data["concept"])])
     save_meta(out, data)
     return out

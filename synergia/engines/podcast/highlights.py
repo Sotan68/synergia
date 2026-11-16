@@ -84,9 +84,9 @@ def compact_transcript(tr: dict, max_chars: int = 400_000) -> str:
     return text[:max_chars]
 
 
-def claude_prompt(tr: dict, title: str) -> str:
+def claude_prompt(tr: dict, title: str, n: int = 5) -> str:
     ec = CFG.engine_c
-    return highlights_prompt(compact_transcript(tr), ec.min_clip_seconds, ec.max_clip_seconds, title)
+    return highlights_prompt(compact_transcript(tr), ec.min_clip_seconds, ec.max_clip_seconds, title, n)
 
 
 def make_validator(duration: float):

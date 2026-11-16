@@ -91,5 +91,30 @@ Synergia can upload a rendered video as a YouTube Short through the official You
 - **About 6 uploads per day.** This limit counts uploads, not go-live times, so you can schedule 6 a day as far ahead as you like. The free quota is 10,000 units and each upload costs 1,600.
 - **Sign-in expires weekly while the app is in "Testing" mode.** Synergia simply asks you to sign in again. To stop this, set the app's publishing status to **In production** on the Audience page.
 
+## Autopilot (a week of videos in one go)
+Open the **Autopilot** page in the browser interface (`python main.py --gui`). It renders a whole batch, then you review it and schedule it.
+
+1. **Make a batch.** Choose how many of each engine you want. The default is 14 videos, 2 a day for a week: 5 podcast clips, 3 Brain Tests, 2 Psychology Explainers, 2 Fact Slideshows and 2 Which One Are You. Press **Start autopilot**. Here is what happens:
+   - **Engine C** takes one episode and cuts all of its clips from it. If you paste an episode URL, it uses that. Otherwise it takes the newest episode it hasn't clipped yet from your **watched channels**. Add channels on the page, e.g. `@ChrisWillx`; they take turns from batch to batch, and uploads shorter than `min_episode_minutes` are skipped. Claude picks the moments plus 2 spares. If no episode is available, the clip slots go to the other engines.
+   - **Engines A, B and E:** Claude suggests fresh topics, skipping ones you've already made (`cache/history.json`), then writes each script.
+   - **Engine D** needs nothing.
+
+   Each video takes roughly 1–2 minutes, plus the transcription of a new episode. You can close the tab; progress is printed in the console. **Stop after this video** keeps what's already made.
+2. **Review.** Every video appears as a card. You can:
+   - **Approve** it or **Drop** it.
+   - Edit its caption (it saves when you click away).
+   - **Regenerate** it: a new script for the same topic, or a new Brain Test.
+   - **Replace** a podcast clip with one of the spare moments.
+
+   A video that failed can be retried. Replacing or regenerating deletes the old render, unless it's on YouTube or queued. Dropped videos stay in the Library.
+3. **Schedule approved.** Each approved video gets the next free posting slot (`schedule_slots`), which manual uploads also respect. As many as today's quota allows upload right away. The rest wait in the upload queue (`cache/queue.json`), and their slots are already reserved.
+
+**Daily uploads.** Press **Install daily uploads** once. This creates a Windows scheduled task called "Synergia uploads". Every day at `upload_time` (default 10:15, just after YouTube's quota resets at 10:00 Romanian time), it runs `main.py --upload-due`. That uploads the next videos in line, up to `daily_upload_limit` (6). Each one is uploaded days before it goes live.
+- If the PC was off at 10:15, the task runs at the next startup. If a video's slot passed meanwhile, it moves to the next free slot.
+- The task runs while you're logged in to Windows, without a window. Its log is `cache/autopilot.log`, and the Autopilot page shows the last run.
+- **Sign-in:** while your Google OAuth app is in *Testing* mode, the YouTube sign-in expires every 7 days. The background task can't open a browser, so the page shows **Sign in again**. To stop this, set the app's publishing status to **In production** (Google Auth Platform → Audience).
+
+All settings are in `[autopilot]` in `config.toml`: `count`, `mix`, `channels`, `min_episode_minutes`, `daily_upload_limit` and `upload_time`.
+
 ## Customising
 All brand tokens are in `config.toml`: colours, fonts, safe zone, timings, subtitle size and position, and Whisper models.

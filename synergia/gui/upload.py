@@ -6,7 +6,7 @@ from pathlib import Path
 from nicegui import run, ui
 
 from synergia.config import CFG
-from synergia.gui.components import S, media_url, rel, run_folder, status_badge
+from synergia.gui.components import S, is_busy, media_url, rel, run_folder, status_badge
 
 NOW, NEXT, AT = "now", "next", "at"
 
@@ -145,7 +145,7 @@ def page(run_path: str = "") -> None:
             show(focus["run"])
 
     async def confirm_and_upload(picks, mode, at, progress, status, results) -> None:
-        if S.busy:
+        if is_busy():
             ui.notify("Something is already running. Wait for it to finish.", type="warning")
             return
         if mode == NEXT and not sch.next_slot():

@@ -61,6 +61,43 @@ def download(url: str) -> tuple[Path, str, dict]:
     return target, info.get("title") or target.stem, _credit(info)
 
 
+def channel_url(channel: str) -> str:
+    """'@ChrisWillx', 'youtube.com/@ChrisWillx' or a full channel URL -> its Videos tab."""
+    c = channel.strip().rstrip("/")
+    if c.startswith("@"):
+        return f"https://www.youtube.com/{c}/videos"
+    if not is_url(c):
+        c = "https://" + c
+    if "youtube.com/" in c and not re.search(r"/(videos|streams|playlist)\b", c):
+        c += "/videos"
+    return c
+
+
+def latest_episodes(channel: str, limit: int = 10) -> list[dict]:
+    """Newest uploads of a channel, newest first, without downloading:
+    [{'id', 'url', 'title', 'duration' (seconds, 0 if unknown), 'channel'}]."""
+    import yt_dlp
+
+    opts = {"extract_flat": "in_playlist", "playlistend": limit, "quiet": True,
+            "no_warnings": True, "skip_download": True}
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(channel_url(channel), download=False) or {}
+    out = []
+    for e in info.get("entries") or []:
+        if not e or not e.get("id"):
+            continue
+        out.append({"id": e["id"], "url": e.get("url") or f"https://www.youtube.com/watch?v={e['id']}",
+                    "title": e.get("title") or "", "duration": float(e.get("duration") or 0),
+                    "channel": info.get("channel") or info.get("uploader") or channel})
+    return out
+
+
+def video_id(url: str) -> str:
+    """YouTube video id from a URL (or the URL itself when there's none), used to remember clipped episodes."""
+    m = re.search(r"(?:v=|youtu\.be/|/shorts/|/live/)([\w-]{11})", url)
+    return m.group(1) if m else url.strip()
+
+
 def resolve(inp: str) -> tuple[Path, str, dict]:
     """-> (local video path, display name, credit info; empty credit for local files)."""
     inp = inp.strip().strip('"').strip("'")

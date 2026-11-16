@@ -82,11 +82,11 @@ JSON SCHEMA:
 ```"""
 
 
-def highlights_prompt(transcript: str, min_s: int, max_s: int, title: str = "") -> str:
+def highlights_prompt(transcript: str, min_s: int, max_s: int, title: str = "", n: int = 5) -> str:
     src = f' from "{title}"' if title else ""
     return f"""You are a viral short-form video editor for SYNERGIA (psychology, life advice, real experiences).
 
-TASK: Below is a timestamped podcast transcript{src}. Find the 5 best self-contained moments
+TASK: Below is a timestamped podcast transcript{src}. Find the {n} best self-contained moments
 to cut into vertical Shorts/Reels/TikToks.
 
 A great clip:
@@ -94,6 +94,7 @@ A great clip:
 - STARTS on a strong hook line (a bold claim, a question, a surprising story beat) — never mid-thought,
 - ENDS on a complete thought / punchline,
 - makes sense with zero context, and delivers psychology, life advice or a raw human experience.
+Clips must not overlap each other.
 
 Use timestamps exactly as they appear in the transcript (mm:ss or h:mm:ss).
 Rank from best to worst.
@@ -215,4 +216,33 @@ Do NOT repeat or closely paraphrase these topics already used:
 Reply with ONE ```json code block and nothing else. Valid JSON only.
 ```json
 {{"topics": ["...", "... 10 short topics, max 10 words each"]}}
+```"""
+
+
+IDEA_KINDS = {
+    "concepts": ('psychology concepts for 10-second explainers: named effects, biases, laws or '
+                 'phenomena (e.g. "The Spotlight Effect", "The Zeigarnik Effect")',
+                 "Use the concept's real, searchable name. Max 6 words each."),
+    "hooks": ('hooks for 5-point life-advice carousels (e.g. "5 things people regret not doing '
+              'after 25", "5 signs someone truly respects you")',
+              "Each hook names its 5 points and promises a specific payoff. Max 12 words each."),
+}
+
+
+def ideas_prompt(kind: str, n: int, past: list[str]) -> str:
+    """Fresh topics for Engine A ("concepts") or Engine B ("hooks"), avoiding past ones."""
+    what, rule = IDEA_KINDS[kind]
+    avoid = "\n".join(f"- {t}" for t in past[:60]) or "- (none yet)"
+    return f"""{BRAND_VOICE}
+
+TASK: Suggest {n} fresh {what}.
+Pick ones that make people stop scrolling, recognise themselves and comment. Mix light and deep.
+{rule}
+
+Do NOT repeat or closely paraphrase these, already used:
+{avoid}
+
+Reply with ONE ```json code block and nothing else. Valid JSON only.
+```json
+{{"topics": ["...", "... exactly {n} items"]}}
 ```"""

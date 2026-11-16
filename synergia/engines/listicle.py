@@ -12,6 +12,7 @@ from synergia.brand.canvas import Box, draw_safe_zone, safe_for
 from synergia.brand.elements import draw_wordmark, footer_baseline
 from synergia.brand.typography import (ACCENT, ACCENT2, MUTED, TEXT, draw_gradient_text, draw_label,
                                      font, layout_text, strip_markup)
+from synergia import history
 from synergia.config import CFG
 from synergia.llm.bridge import check_text, normalize_common, words
 from synergia.llm.prompts import listicle_prompt
@@ -177,5 +178,6 @@ def produce(data: dict, debug: bool = False) -> Path:
         sub = out / "4x5"
         sub.mkdir(exist_ok=True)
         render(data, sub, seed, debug, height=1350)
+    history.remember("listicle.hooks", [strip_markup(data["cover_title"])])
     save_meta(out, data)
     return out

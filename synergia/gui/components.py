@@ -60,9 +60,15 @@ def engine_label(folder: Path) -> str:
 
 # ---------------------------------------------------------------- slow work
 
+def is_busy() -> bool:
+    """A render / upload is running here, or an autopilot batch is rendering in the background."""
+    from synergia import autopilot
+    return S.busy or autopilot.running()
+
+
 async def busy(label: str, fn: Callable, *args, **kwargs) -> Any:
     """Run fn in a worker thread behind a modal spinner. Returns its result, or None on failure."""
-    if S.busy:
+    if is_busy():
         ui.notify("Something is already running. Wait for it to finish.", type="warning")
         return None
     S.busy = True
@@ -239,6 +245,10 @@ def status_badge(folder: Path) -> None:
 
     yt = read_ledger(folder).get("youtube")
     if not yt:
+        from synergia.publish import queue
+        q = queue.entry(folder)
+        if q:
+            ui.badge(f"queued · live {sch.fmt(datetime.fromisoformat(q['publish_at']))}", color="info")
         return
     at = yt.get("publish_at")
     if at and datetime.fromisoformat(at) > sch.now():

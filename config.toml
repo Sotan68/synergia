@@ -121,3 +121,16 @@ synthetic_media = false    # YouTube's "altered or synthetic content" label: for
 ask_after_render = true    # offer an upload right after a render (only once YouTube is set up)
 # Posting times (local, 24h) used when you answer "n" to "When?": each video takes the next free one.
 schedule_slots = ["12:00", "16:00"]
+
+[autopilot]
+# Autopilot page: render a week of videos in one go, review them, and queue them for YouTube.
+count = 14                                   # videos per batch (2 slots/day = a week)
+mix = { A = 2, B = 2, C = 5, D = 3, E = 2 }  # how many of each engine (scaled if count differs)
+# Engine C: an episode URL pasted on the page wins; otherwise the newest unclipped episode of one
+# of these channels is used (they take turns). Also editable on the Autopilot page.
+channels = []                                # e.g. ["@ChrisWillx", "@hubermanlab"]
+min_episode_minutes = 20                     # skip shorter uploads (highlight cuts, trailers)
+# Uploads: YouTube's free API quota allows about 6 a day. Approved videos wait in a queue, and a
+# daily Windows scheduled task uploads the next ones just after the quota resets (10:00 in Romania).
+daily_upload_limit = 6
+upload_time = "10:15"

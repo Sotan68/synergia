@@ -26,6 +26,10 @@ class NotConfigured(RuntimeError):
     pass
 
 
+class NeedsSignIn(RuntimeError):
+    """The saved sign-in expired and we may not open a browser (background job)."""
+
+
 def _paths():
     yt = CFG.youtube
     return CFG.root / yt.client_secret, CFG.root / yt.token_file
@@ -101,7 +105,7 @@ def shorts_warnings(info: dict) -> list[str]:
 
 # ---------------------------------------------------------------- auth + upload
 
-def _credentials():
+def _credentials(interactive: bool = True):
     from google.auth.exceptions import RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
@@ -119,6 +123,9 @@ def _credentials():
             except RefreshError:
                 creds = None   # revoked, or a 7-day "Testing"-mode token: sign in again
     if creds is None or not creds.valid:
+        if not interactive:
+            raise NeedsSignIn("The YouTube sign-in has expired. Open Synergia and sign in again "
+                              "(Autopilot page → Sign in again).")
         if not secret.is_file():
             raise NotConfigured(
                 f"YouTube isn't set up: {secret} not found. See 'Uploading to YouTube' in README.md.")
@@ -144,6 +151,12 @@ def _friendly(err) -> str:
     return text
 
 
+def sign_in() -> bool:
+    """Make sure there's a valid sign-in, opening the browser if needed."""
+    _credentials(interactive=True)
+    return True
+
+
 def is_limit_error(err: BaseException) -> bool:
     """Daily API quota or channel upload limit: retrying other videos today will fail too."""
     text = str(err)
@@ -151,7 +164,7 @@ def is_limit_error(err: BaseException) -> bool:
 
 
 def upload(post: Post, privacy: str | None = None, publish_at: datetime | None = None,
-           on_progress: Callable[[float], None] | None = None) -> dict:
+           on_progress: Callable[[float], None] | None = None, interactive: bool = True) -> dict:
     """Upload post.video and record it in posted.json.
 
     Returns {'id', 'url', 'privacy', 'file'} plus 'publish_at' (local ISO time) if the schedule
@@ -162,7 +175,7 @@ def upload(post: Post, privacy: str | None = None, publish_at: datetime | None =
     from googleapiclient.http import MediaFileUpload
 
     privacy = privacy or CFG.youtube.privacy
-    service = build("youtube", "v3", credentials=_credentials(), cache_discovery=False)
+    service = build("youtube", "v3", credentials=_credentials(interactive), cache_discovery=False)
     media = MediaFileUpload(str(post.video), mimetype="video/mp4",
                             chunksize=8 * 1024 * 1024, resumable=True)
     request = service.videos().insert(part="snippet,status",

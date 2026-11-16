@@ -70,10 +70,14 @@ def parse_when(text: str, ref: datetime | None = None) -> datetime:
     return when
 
 
-def taken(platform: str = "youtube") -> set[datetime]:
-    """Future publish times already booked by earlier uploads (read from every posted.json)."""
+def taken(platform: str = "youtube", include_queue: bool = True) -> set[datetime]:
+    """Publish times already booked: earlier uploads (every posted.json) plus videos waiting in
+    the autopilot upload queue."""
     root: Path = CFG.output.dir
     out = set()
+    if include_queue and platform == "youtube":
+        from synergia.publish import queue
+        out |= queue.queued_times()
     for ledger in root.glob("*/*/posted.json") if root.is_dir() else []:
         at = read_ledger(ledger.parent).get(platform, {}).get("publish_at")
         if at:

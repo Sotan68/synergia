@@ -6,13 +6,13 @@ import os
 from nicegui import app, ui
 
 from synergia.config import CFG
-from synergia.gui import create, library, upload
+from synergia.gui import autopilot, create, library, upload
 from synergia.gui.components import MEDIA, S
 from synergia.video import have_ffmpeg
 
 PORT = 8765
-NAV = [("Create", "/", "auto_awesome"), ("Library", "/library", "video_library"),
-       ("Upload", "/upload", "cloud_upload")]
+NAV = [("Create", "/", "auto_awesome"), ("Autopilot", "/autopilot", "rocket_launch"),
+       ("Library", "/library", "video_library"), ("Upload", "/upload", "cloud_upload")]
 FONT_CSS = ""     # set in start()
 FFMPEG = True     # set in start()
 
@@ -57,6 +57,12 @@ def _register_pages() -> None:
         _frame("Create")
         with ui.column().classes("w-full max-w-6xl mx-auto p-4 gap-4"):
             _no_ffmpeg() if not FFMPEG else create.page(engine)
+
+    @ui.page("/autopilot")
+    def _autopilot() -> None:
+        _frame("Autopilot")
+        with ui.column().classes("w-full max-w-7xl mx-auto p-4 gap-4"):
+            _no_ffmpeg() if not FFMPEG else autopilot.page()
 
     @ui.page("/library")
     def _library() -> None:
