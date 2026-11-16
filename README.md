@@ -21,6 +21,18 @@ On an NVIDIA GPU, Whisper runs on CUDA automatically and falls back to the CPU i
 .venv\Scripts\python main.py --debug    # safe-zone overlay, tracking debug video, tracebacks
 ```
 
+### Browser interface
+```powershell
+.venv\Scripts\python main.py --gui            # opens http://localhost:8765
+.venv\Scripts\python main.py --gui --demo     # same, with the built-in sample scripts
+```
+The interface runs the same engines as the console, with clicks instead of typing:
+- **Create:** one tab per engine. For the Claude step, press **Read clipboard** after copying Claude's reply, or paste it into the box. Each script field is a text box you edit directly. When the render finishes, the slides, the video and `caption.txt` (which you can edit) appear on the page.
+- **Library:** every past run with a thumbnail and its YouTube status. Click one to watch it, edit its caption, open the folder or upload it.
+- **Upload:** tick one or more videos, check the preview, then choose **Now**, **Next free slot**, or a date and time.
+
+Keep the console window open while you use it: progress details still print there, and Ctrl+C there stops the interface. `python main.py` without `--gui` still runs the console version.
+
 ### How the Claude step works (Engines A and B, plus C's highlight finder)
 1. Synergia copies a ready-made prompt to your clipboard.
 2. Paste it into claude.ai and send it.

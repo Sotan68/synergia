@@ -65,10 +65,7 @@ ASK, NEXT_SLOT, BACK = "ask", "next", "back"   # besides None (now) or a datetim
 
 def _next_slot():
     from synergia.publish import schedule as sch
-    try:
-        return sch.next_free_slot(sch.parse_slots(CFG.youtube.schedule_slots), sch.taken())
-    except (ValueError, AttributeError):
-        return None
+    return sch.next_slot()
 
 
 def _ask_when(batch: bool = False):

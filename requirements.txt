@@ -9,3 +9,4 @@ nvidia-cublas-cu12; platform_system == "Windows"
 nvidia-cudnn-cu12>=9,<10; platform_system == "Windows"
 google-api-python-client>=2.150
 google-auth-oauthlib>=1.2
+nicegui>=2.10

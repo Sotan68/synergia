@@ -101,3 +101,11 @@ def next_free_slot(slots: list[time], booked: set[datetime], ref: datetime | Non
 def fmt(when: datetime) -> str:
     """Sat 15 Nov 18:00"""
     return f"{when:%a} {when.day} {when:%b %H:%M}"
+
+
+def next_slot() -> datetime | None:
+    """Next free slot from schedule_slots in config.toml, or None if there is none (or it's misconfigured)."""
+    try:
+        return next_free_slot(parse_slots(CFG.youtube.schedule_slots), taken())
+    except (ValueError, AttributeError):
+        return None

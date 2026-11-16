@@ -49,10 +49,70 @@ def credit_text(credit: dict) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- steps (no prompts; the GUI uses these)
+
+def load_source(inp: str) -> tuple[Path, str, dict, dict]:
+    """URL or local path -> (video file, display name, credit dict, video_info)."""
+    src, name, credit = resolve(inp)
+    return src, name, credit, video_info(src)
+
+
+def range_clip(src: Path, info: dict, rng: str) -> tuple[dict, hl.Candidate]:
+    """A typed range like '12:30-13:15': transcribe just that part, snap to word edges."""
+    s, e = hl.parse_range(rng)
+    e = min(e, info["duration"])
+    pad_s, pad_e = max(0.0, s - 3), min(info["duration"], e + 3)
+    tr = transcribe(src, pad_s, pad_e)
+    s, e = hl.snap(s, e, tr["words"], window=1.5)
+    return tr, hl.Candidate(s, e)
+
+
+def full_transcript(src: Path, info: dict) -> dict:
+    tr = transcribe(src, total_duration=info["duration"])
+    if not tr["words"]:
+        raise RuntimeError("No speech was detected in this video.")
+    return tr
+
+
+def candidates(tr: dict, claude_data: dict | None = None) -> tuple[list[hl.Candidate], str]:
+    """Highlights from Claude's reply, or from the offline heuristic when claude_data is None."""
+    if claude_data is not None:
+        cands, label = hl.from_claude(claude_data), "Claude"
+    else:
+        cands, label = hl.heuristic(tr), "offline heuristic"
+    if not cands:
+        raise RuntimeError("No highlight candidates found.")
+    return cands, label
+
+
+def pick(choice: str, cands: list[hl.Candidate], words: list[dict]) -> list[hl.Candidate]:
+    """'all', '1,3' or 'mm:ss-mm:ss' -> picked candidates, snapped to sentence edges. Raises ValueError."""
+    picked = _parse_pick(choice, cands)
+    for p in picked:
+        p.start, p.end = hl.snap(p.start, p.end, words)
+    return picked
+
+
+def suggested_title(c: hl.Candidate) -> str:
+    return c.title if c.why and not c.why.startswith("heuristic") else ""
+
+
+def render_picked(src: Path, info: dict, name: str, picked: list[hl.Candidate], words: list[dict],
+                  title: str | None = None, debug: bool = False, credit: str = "") -> Path:
+    """Render one clip (with `title`; None = the suggested one) or several (each with its suggested title)."""
+    if len(picked) > 1:
+        return _render_batch(src, info, name, picked, words, debug, credit)
+    c = picked[0]
+    c.end = min(c.end, info["duration"])
+    return _render_one(src, info, name, c, suggested_title(c) if title is None else title,
+                       words, debug, credit)
+
+
+# ---------------------------------------------------------------- console flow
+
 def run(inp: str, debug: bool = False) -> Path:
     with console.status("[yellow]Fetching source…"):
-        src, name, credit = resolve(inp)
-    info = video_info(src)
+        src, name, credit, info = load_source(inp)
     console.print(f"[green]✓[/green] {name}  [dim]{info['width']}x{info['height']} "
                   f"@ {info['fps']:.2f}fps, {hl.fmt_ts(info['duration'])}[/dim]")
     if not credit:
@@ -65,52 +125,38 @@ def run(inp: str, debug: bool = False) -> Path:
 
     rng = Prompt.ask("Clip range [dim](e.g. 12:30-13:15)[/dim], or [bold]Enter[/bold] to find highlights",
                      default="", show_default=False).strip()
-    chosen: hl.Candidate | None = None
     if rng:
-        s, e = hl.parse_range(rng)
-        e = min(e, info["duration"])
-        pad_s, pad_e = max(0.0, s - 3), min(info["duration"], e + 3)
-        tr = transcribe(src, pad_s, pad_e)
-        s, e = hl.snap(s, e, tr["words"], window=1.5)
-        chosen = hl.Candidate(s, e)
+        tr, chosen = range_clip(src, info, rng)
     else:
-        tr = transcribe(src, total_duration=info["duration"])
-        if not tr["words"]:
-            raise RuntimeError("No speech was detected in this video.")
-        cands: list[hl.Candidate]
+        tr = full_transcript(src, info)
         try:
             data = ask_claude(hl.claude_prompt(tr, name), hl.make_validator(info["duration"]),
                               title="Find highlights with Claude", allow_skip=True)
-            cands, label = hl.from_claude(data), "Claude"
         except Skipped:
-            cands, label = hl.heuristic(tr), "offline heuristic"
-        if not cands:
-            raise RuntimeError("No highlight candidates found.")
+            data = None
+        cands, label = candidates(tr, data)
         _show(cands, label)
         picked: list[hl.Candidate] = []
         while not picked:
             c = Prompt.ask("Pick [bold]all[/bold], one or more [bold]#[/bold] (e.g. 1,3,5), "
                            "or a custom range mm:ss-mm:ss", default="all").strip().lower()
             try:
-                picked = _parse_pick(c, cands)
+                picked = pick(c, cands, tr["words"])
             except ValueError as ex:
                 console.print(f"[red]{ex}[/red]")
-        for p in picked:
-            p.start, p.end = hl.snap(p.start, p.end, tr["words"])
         if len(picked) > 1:
-            return _render_batch(src, info, name, picked, tr["words"], debug, credit_str)
+            return render_picked(src, info, name, picked, tr["words"], debug=debug, credit=credit_str)
         chosen = picked[0]
 
     chosen.end = min(chosen.end, info["duration"])
     _cap(chosen, tr["words"])
     console.print(f"[green]✓[/green] Clip {hl.fmt_ts(chosen.start)}–{hl.fmt_ts(chosen.end)} "
                   f"({chosen.duration:.1f}s)")
-    title = chosen.title if chosen.why and not chosen.why.startswith("heuristic") else ""
     title = Prompt.ask("On-screen title [dim](Enter keeps, '-' for none)[/dim]",
-                       default=title or "-").strip()
+                       default=suggested_title(chosen) or "-").strip()
     title = "" if title == "-" else title
 
-    return _render_one(src, info, name, chosen, title, tr["words"], debug, credit_str)
+    return render_picked(src, info, name, [chosen], tr["words"], title, debug, credit_str)
 
 
 def _cap(c: hl.Candidate, words: list[dict]) -> None:
@@ -140,7 +186,7 @@ def _render_one(src: Path, info: dict, name: str, c: hl.Candidate, title: str,
     _cap(c, words)
     out = run_dir("C", title or name)
     render_clip(src, info, c.start, c.end, words, out, title=title, debug=debug)
-    claude_title = c.title if c.why and not c.why.startswith("heuristic") else ""
+    claude_title = suggested_title(c)
     save_meta(out, {"source": str(src), "source_title": name, "start": c.start,
                     "end": c.end, "title": title,
                     "post_title": title or claude_title or name,
@@ -156,7 +202,7 @@ def _render_batch(src: Path, info: dict, name: str, picked: list[hl.Candidate],
     for i, c in enumerate(picked, 1):
         c.end = min(c.end, info["duration"])
         _cap(c, words)
-        title = c.title if c.why and not c.why.startswith("heuristic") else ""
+        title = suggested_title(c)
         console.print(f"\n[bold]Clip {i}/{len(picked)}[/bold]  {hl.fmt_ts(c.start)}–"
                       f"{hl.fmt_ts(c.end)} ({c.duration:.1f}s)  [dim]{title}[/dim]")
         try:

@@ -1,4 +1,5 @@
 """Quick checks for the clipboard bridge and parsers. Run: .venv\\Scripts\\python -m pytest tests (or python tests\\test_bridge.py)."""
+import json
 import sys
 from pathlib import Path
 
@@ -8,7 +9,7 @@ from synergia import demo  # noqa: E402
 from synergia.brand.typography import parse_markup  # noqa: E402
 from synergia.engines import listicle, psychology  # noqa: E402
 from synergia.engines.podcast import highlights as hl  # noqa: E402
-from synergia.llm.bridge import extract_json  # noqa: E402
+from synergia.llm.bridge import extract_json, get_path, parse_reply, set_path  # noqa: E402
 
 
 def test_extract_fenced():
@@ -44,6 +45,24 @@ def test_timestamps():
     assert hl.parse_ts("1:02:03") == 3723
     assert hl.parse_ts("02:05") == 125
     assert hl.parse_range("12:30-13:15") == (750, 795)
+
+
+def test_parse_reply():
+    good = "```json\n" + json.dumps(demo.PSYCHOLOGY) + "\n```"
+    data, errors = parse_reply(good, psychology.validate)
+    assert errors == [] and data["concept"] == demo.PSYCHOLOGY["concept"]
+    data, errors = parse_reply("no json", psychology.validate)
+    assert data is None and errors
+    data, errors = parse_reply('{"concept": "x"}', psychology.validate)
+    assert data is None and errors
+
+
+def test_paths():
+    d = {"points": [{"text": "a"}, {"text": "b"}], "title": "t"}
+    assert get_path(d, "points.1.text") == "b"
+    set_path(d, "points.1.text", "B")
+    set_path(d, "title", "T")
+    assert d == {"points": [{"text": "a"}, {"text": "B"}], "title": "T"}
 
 
 if __name__ == "__main__":

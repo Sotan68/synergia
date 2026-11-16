@@ -79,6 +79,16 @@ def normalize_common(data: dict) -> dict:
     return data
 
 
+def parse_reply(reply: str, validator: Validator) -> tuple[dict | None, list[str]]:
+    """(data, []) if the reply holds valid JSON that passes the validator, else (None, errors)."""
+    try:
+        data = extract_json(reply)
+    except ValueError as e:
+        return None, [str(e)]
+    errors = validator(data)
+    return (None, errors) if errors else (data, [])
+
+
 # ---------------------------------------------------------------- clipboard round-trip
 def _read_manual() -> str:
     console.print("[dim]Paste Claude's reply below, then type [bold]END[/bold] on its own line:[/dim]")
@@ -150,14 +160,9 @@ def ask_claude(prompt: str, validator: Validator, title: str = "Claude",
                 continue
             break
 
-        try:
-            data = extract_json(reply)
-        except ValueError as e:
-            errors = [str(e)]
-        else:
-            errors = validator(data)
-            if not errors:
-                return data
+        data, errors = parse_reply(reply, validator)
+        if data is not None:
+            return data
         console.print(Panel("\n".join(f"• {e}" for e in errors), title="Reply needs a fix",
                             border_style="red"))
         current = fix_prompt(errors, reply)
@@ -174,7 +179,7 @@ def review(data: dict, fields: list[tuple[str, str]], title: str = "Script") -> 
         t.add_column("Field", style="bold")
         t.add_column("Text")
         for i, (label, path) in enumerate(fields, 1):
-            t.add_row(str(i), label, str(_get(data, path)))
+            t.add_row(str(i), label, str(get_path(data, path)))
         console.print(t)
         c = Prompt.ask("[dim][Enter]=render  <number>=edit field  r=regenerate  q=cancel[/dim]",
                        default="", show_default=False).strip().lower()
@@ -186,19 +191,20 @@ def review(data: dict, fields: list[tuple[str, str]], title: str = "Script") -> 
             return "regen"
         if c.isdigit() and 1 <= int(c) <= len(fields):
             label, path = fields[int(c) - 1]
-            console.print(f"[dim]Current:[/dim] {_get(data, path)}")
+            console.print(f"[dim]Current:[/dim] {get_path(data, path)}")
             new = Prompt.ask(f"New {label} (use **word** to highlight)").strip()
             if new:
-                _set(data, path, new)
+                set_path(data, path, new)
 
 
-def _get(d, path: str):
+def get_path(d, path: str):
+    """data['points'][0]['text'] for path 'points.0.text'."""
     for p in path.split("."):
         d = d[int(p)] if p.isdigit() else d[p]
     return d
 
 
-def _set(d, path: str, value) -> None:
+def set_path(d, path: str, value) -> None:
     parts = path.split(".")
     for p in parts[:-1]:
         d = d[int(p)] if p.isdigit() else d[p]
