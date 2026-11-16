@@ -101,7 +101,48 @@ def _copy(text: str) -> bool:
 def claude_step(prompt: str, validator: Validator, title: str,
                 on_done: Callable[[dict], Any], on_cancel: Callable | None = None,
                 on_skip: Callable | None = None, skip_label: str = "Skip") -> None:
-    """GUI version of bridge.ask_claude: copy the prompt, paste Claude's reply, validate, fix if needed."""
+    """GUI version of bridge.ask_claude: ask automatically through Claude Code when available,
+    otherwise (or if that fails) show the copy/paste card."""
+    from synergia.llm import claude_code
+
+    box = ui.column().classes("w-full")
+    manual = dict(validator=validator, title=title, on_done=on_done, on_cancel=on_cancel,
+                  on_skip=on_skip, skip_label=skip_label)
+    if not claude_code.available():
+        with box:
+            _manual_step(prompt, **manual)
+        return
+
+    def attempt():
+        try:
+            return claude_code.ask_auto(prompt, validator), None
+        except claude_code.ClaudeCodeError as e:
+            return None, e
+
+    async def run_auto() -> None:
+        res = await busy(f"{title}: asking Claude…", attempt)
+        if res is None:          # unexpected error, already shown as a toast
+            with box:
+                _manual_step(prompt, **manual)
+            return
+        data, err = res
+        if data is not None:
+            await call(on_done, data)
+            return
+        with box:
+            with ui.card().classes("w-full bg-orange-10 border border-orange-8"):
+                ui.label(str(err)).classes("text-sm")
+                ui.label("Falling back to copy and paste.").classes("text-xs opacity-60")
+            _manual_step(err.last_prompt or prompt, **manual)
+
+    with box:
+        ui.timer(0, run_auto, once=True)
+
+
+def _manual_step(prompt: str, validator: Validator, title: str,
+                 on_done: Callable[[dict], Any], on_cancel: Callable | None = None,
+                 on_skip: Callable | None = None, skip_label: str = "Skip") -> None:
+    """Copy the prompt, paste Claude's reply, validate, fix if needed."""
     CFG.output.cache_dir.mkdir(parents=True, exist_ok=True)
     prompt_file = CFG.output.cache_dir / "last_prompt.txt"
     state = {"current": prompt}

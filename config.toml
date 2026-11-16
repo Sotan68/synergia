@@ -31,12 +31,12 @@ bottom = 1440
 [sound]
 # Keyboard-typing sound on Engine A/B videos, synced letter-by-letter to the typed text (real CC0 keystrokes in assets/sounds/keys).
 typing = true
-typing_volume = 0.2        # 0..1
+typing_volume = 0.1        # 0..1
 # Background music (CC0 tracks in music_dir; one picked at random per video, looped if short).
 music = true
 music_dir = "assets/music"
-music_volume = 0.15       # 0..1, applied after loudness normalisation
-sfx_volume = 0.5           # 0..1, timer ticks / dings / pops in Engines D and E
+music_volume = 0.1       # 0..1, applied after loudness normalisation
+sfx_volume = 0.3           # 0..1, timer ticks / dings / pops in Engines D and E
 
 [engine_a]
 fps = 30
@@ -92,6 +92,17 @@ title_seconds = 3.5
 title_y = 270              # top edge of the title box (safe zone starts at 250)
 # Caption credit line for the original creator (channel + video title + link are filled in).
 credit_prefix = "🎙️ Credit:"
+
+[claude]
+# How Synergia gets scripts, topic ideas and highlights from Claude:
+#   "code"  = automatically, through Claude Code (`claude -p`) on your claude.ai Pro login.
+#             No copy/paste and no extra cost (it counts against your Pro usage limits).
+#   "paste" = the manual clipboard round trip with claude.ai.
+# If "code" fails (not signed in, usage limit, timeout), Synergia falls back to copy and paste.
+mode = "code"
+model = ""                 # "" = Claude Code's default; or "sonnet" / "opus" / "haiku"
+effort = ""                # "" = default; or "low" / "medium" / "high"
+timeout_seconds = 300
 
 [output]
 dir = "output"

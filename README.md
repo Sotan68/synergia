@@ -27,18 +27,25 @@ On an NVIDIA GPU, Whisper runs on CUDA automatically and falls back to the CPU i
 .venv\Scripts\python main.py --gui --demo     # same, with the built-in sample scripts
 ```
 The interface runs the same engines as the console, with clicks instead of typing:
-- **Create:** one tab per engine. For the Claude step, press **Read clipboard** after copying Claude's reply, or paste it into the box. Each script field is a text box you edit directly. When the render finishes, the slides, the video and `caption.txt` (which you can edit) appear on the page.
+- **Create:** one tab per engine. Claude writes the script automatically (see below); if that falls back to copy and paste, press **Read clipboard** after copying Claude's reply, or paste it into the box. Each script field is a text box you edit directly. When the render finishes, the slides, the video and `caption.txt` (which you can edit) appear on the page.
 - **Library:** every past run with a thumbnail and its YouTube status. Click one to watch it, edit its caption, open the folder or upload it.
 - **Upload:** tick one or more videos, check the preview, then choose **Now**, **Next free slot**, or a date and time.
 
 Keep the console window open while you use it: progress details still print there, and Ctrl+C there stops the interface. `python main.py` without `--gui` still runs the console version.
 
-### How the Claude step works (Engines A and B, plus C's highlight finder)
+### How the Claude step works (scripts for A, B and E, E's topic ideas, C's highlight finder)
+**Automatic (default):** Synergia asks Claude itself through Claude Code's headless mode (`claude -p`), using your claude.ai Pro login. There's nothing to copy or paste, and it costs nothing extra: each request counts against your Pro usage limits, like a chat on claude.ai. If a reply isn't usable, Synergia sends the correction prompt itself (up to 3 tries). A script takes about 10–20 seconds.
+- Needs Claude Code installed and signed in once with your claude.ai account (run `claude` in a terminal and log in).
+- To stay free, Synergia only runs it when `claude auth status` reports a claude.ai subscription login, and it never passes an API key to it.
+- Settings live in `[claude]` in `config.toml`: model, effort and timeout. Set `mode = "paste"` to always use the manual round trip below.
+
+**Copy and paste (fallback):** if the automatic step fails (not signed in, usage limit reached, timeout), Synergia says why and switches to this:
 1. Synergia copies a ready-made prompt to your clipboard.
 2. Paste it into claude.ai and send it.
 3. Click **Copy** under Claude's reply, return to the terminal and press **Enter**.
 4. If the reply isn't usable, a correction prompt is copied for you. Send it in the same chat.
-5. Review the script, edit any field (mark highlighted words with `**word**`), then press Enter to render.
+
+Either way, you then review the script, edit any field (mark highlighted words with `**word**`) and render.
 
 ## Engines
 | Engine | Input | Output |

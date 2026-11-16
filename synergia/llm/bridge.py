@@ -7,6 +7,7 @@ from typing import Callable
 
 import pyperclip
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
@@ -114,13 +115,25 @@ def _copy(text: str) -> bool:
 
 def ask_claude(prompt: str, validator: Validator, title: str = "Claude",
                allow_skip: bool = False, max_rounds: int = 4) -> dict:
-    """Run the clipboard round-trip until a reply passes validation.
+    """Get a reply that passes validation: automatically via Claude Code when available,
+    otherwise (or if that fails) through the clipboard round-trip.
 
     Raises Cancelled on 'q', Skipped on 's' (only when allow_skip).
     """
+    from synergia.llm import claude_code
+
+    current = prompt
+    if claude_code.available():
+        try:
+            with console.status(f"[yellow]{title}: asking Claude (Claude Code)…") as st:
+                return claude_code.ask_auto(prompt, validator,
+                                            on_status=lambda m: st.update(f"[yellow]{title}: {m}"))
+        except claude_code.ClaudeCodeError as e:
+            console.print(f"[yellow]{escape(str(e))}[/yellow]\n[dim]Falling back to copy and paste.[/dim]")
+            current = e.last_prompt or prompt
+
     CFG.output.cache_dir.mkdir(parents=True, exist_ok=True)
     prompt_file = CFG.output.cache_dir / "last_prompt.txt"
-    current = prompt
     for _ in range(max_rounds):
         prompt_file.write_text(current, encoding="utf-8")
         copied = _copy(current)
