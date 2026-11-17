@@ -13,7 +13,9 @@ from datetime import datetime, timezone
 from synergia.config import CFG
 from synergia.publish import Post, record
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+READ_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"   # to see what's already scheduled
+SCOPES = [UPLOAD_SCOPE, READ_SCOPE]   # asked for at sign-in; older upload-only sign-ins still upload
 TITLE_MAX = 100            # characters
 DESCRIPTION_MAX = 5000     # bytes (UTF-8)
 TAGS_MAX = 500             # characters, all tags together
@@ -105,7 +107,7 @@ def shorts_warnings(info: dict) -> list[str]:
 
 # ---------------------------------------------------------------- auth + upload
 
-def _credentials(interactive: bool = True):
+def _credentials(interactive: bool = True, need: tuple[str, ...] = (UPLOAD_SCOPE,)):
     from google.auth.exceptions import RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
@@ -114,10 +116,12 @@ def _credentials(interactive: bool = True):
     secret, token = _paths()
     creds = None
     if token.is_file():
-        creds = Credentials.from_authorized_user_file(str(token), SCOPES)
-        if creds.valid:
+        creds = Credentials.from_authorized_user_file(str(token))   # with the scopes it was granted
+        if not creds.has_scopes(list(need)):
+            creds = None   # an older sign-in without this permission: sign in again
+        elif creds.valid:
             return creds
-        if creds.expired and creds.refresh_token:
+        elif creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
             except RefreshError:
@@ -152,9 +156,52 @@ def _friendly(err) -> str:
 
 
 def sign_in() -> bool:
-    """Make sure there's a valid sign-in, opening the browser if needed."""
-    _credentials(interactive=True)
+    """Make sure there's a valid sign-in with every permission, opening the browser if needed."""
+    _credentials(interactive=True, need=tuple(SCOPES))
     return True
+
+
+def can_read_schedule() -> bool:
+    """True if the saved sign-in may read the channel (to see videos scheduled outside Synergia)."""
+    import json
+    try:
+        scopes = json.loads(_paths()[1].read_text(encoding="utf-8")).get("scopes") or []
+    except (OSError, ValueError):
+        return False
+    return READ_SCOPE in scopes
+
+
+def scheduled(max_videos: int = 100) -> dict[str, datetime]:
+    """{video id: go-live time (local)} for the channel's videos still waiting to go public,
+    including ones scheduled in YouTube Studio. Never opens a browser; raises if YouTube can't be read."""
+    from googleapiclient.discovery import build
+
+    service = build("youtube", "v3", credentials=_credentials(False, need=(READ_SCOPE,)),
+                    cache_discovery=False)
+    chans = service.channels().list(part="contentDetails", mine=True).execute().get("items", [])
+    if not chans:
+        return {}
+    uploads = chans[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+    ids: list[str] = []
+    page = None
+    while len(ids) < max_videos:   # newest first; scheduled videos are among the latest uploads
+        res = service.playlistItems().list(part="contentDetails", playlistId=uploads, maxResults=50,
+                                           pageToken=page).execute()
+        ids += [i["contentDetails"]["videoId"] for i in res.get("items", [])]
+        page = res.get("nextPageToken")
+        if not page:
+            break
+    now = datetime.now(timezone.utc)
+    out: dict[str, datetime] = {}
+    for k in range(0, len(ids), 50):
+        res = service.videos().list(part="status", id=",".join(ids[k:k + 50])).execute()
+        for v in res.get("items", []):
+            at = v.get("status", {}).get("publishAt")
+            if at:
+                when = datetime.fromisoformat(at.replace("Z", "+00:00"))
+                if when > now:
+                    out[v["id"]] = when.astimezone()
+    return out
 
 
 def is_limit_error(err: BaseException) -> bool:
@@ -212,4 +259,6 @@ def upload(post: Post, privacy: str | None = None, publish_at: datetime | None =
         else:
             result["schedule_dropped"] = True
     record(post.folder, "youtube", result)
+    from synergia.publish import schedule
+    schedule.forget_remote()
     return result

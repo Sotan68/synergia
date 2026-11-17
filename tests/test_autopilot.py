@@ -22,8 +22,21 @@ def sandbox(tmp_path, monkeypatch):
     """Point output/ and cache/ at a temp folder."""
     monkeypatch.setattr(CFG.output, "dir", tmp_path / "output")
     monkeypatch.setattr(CFG.output, "cache_dir", tmp_path / "cache")
+    monkeypatch.setattr(sch, "youtube_scheduled", lambda refresh=False: None)   # no network
     (tmp_path / "output").mkdir()
     return tmp_path
+
+
+def test_slots_skip_videos_scheduled_on_youtube(sandbox, monkeypatch):
+    first = sch.next_slot()
+    remote = {"studio": first}
+    monkeypatch.setattr(sch, "youtube_scheduled", lambda refresh=False: remote)
+    assert first in sch.taken() and sch.next_slot() > first
+    moved = make_run(sandbox, "2026-01-01_000000_moved")   # rescheduled in Studio: YouTube's time wins
+    record(moved, "youtube", {"id": "m", "publish_at": "2030-01-01T12:00+02:00"})
+    remote["m"] = first + timedelta(days=1)
+    assert datetime.fromisoformat("2030-01-01T12:00+02:00") not in sch.taken()
+    assert remote["m"] in sch.taken()
 
 
 def make_run(root: Path, name: str, engine: str = "D - Brain Test") -> Path:

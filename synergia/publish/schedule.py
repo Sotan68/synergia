@@ -70,21 +70,51 @@ def parse_when(text: str, ref: datetime | None = None) -> datetime:
     return when
 
 
+REMOTE_TTL = 300   # seconds to reuse the channel's schedule before asking YouTube again
+_remote: dict = {"at": 0.0, "times": None}
+
+
+def youtube_scheduled(refresh: bool = False) -> dict[str, datetime] | None:
+    """{video id: go-live time} of videos scheduled on the channel itself, including ones scheduled
+    in YouTube Studio or from another PC. None if the sign-in can't read the channel or YouTube
+    can't be reached (then only Synergia's own records count)."""
+    import time as _t
+    from synergia.publish import youtube
+    if not youtube.can_read_schedule():
+        return None
+    if refresh or _remote["times"] is None or _t.monotonic() - _remote["at"] > REMOTE_TTL:
+        try:
+            _remote["times"] = youtube.scheduled()
+        except Exception:  # noqa: BLE001 — offline, sign-in expired, quota: fall back to local records
+            return _remote["times"]
+        _remote["at"] = _t.monotonic()
+    return _remote["times"]
+
+
+def forget_remote() -> None:
+    """Ask YouTube again next time (after an upload changed the schedule)."""
+    _remote["at"] = float("-inf")
+
+
 def taken(platform: str = "youtube", include_queue: bool = True) -> set[datetime]:
-    """Publish times already booked: earlier uploads (every posted.json) plus videos waiting in
-    the autopilot upload queue."""
+    """Publish times already booked: earlier uploads (every posted.json), videos waiting in the
+    autopilot upload queue, and whatever is scheduled on the YouTube channel itself."""
     root: Path = CFG.output.dir
     out = set()
+    remote = youtube_scheduled() if platform == "youtube" else None
     if include_queue and platform == "youtube":
         from synergia.publish import queue
         out |= queue.queued_times()
     for ledger in root.glob("*/*/posted.json") if root.is_dir() else []:
-        at = read_ledger(ledger.parent).get(platform, {}).get("publish_at")
-        if at:
+        entry = read_ledger(ledger.parent).get(platform, {})
+        at = entry.get("publish_at")
+        if at and not (remote is not None and entry.get("id") in remote):   # YouTube's time wins
             try:
                 out.add(datetime.fromisoformat(at).astimezone())
             except ValueError:
                 pass
+    if remote:
+        out |= set(remote.values())
     return out
 
 

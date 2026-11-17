@@ -65,6 +65,9 @@ def status_strip() -> None:
             if last.get("needs_sign_in"):
                 ui.label("The YouTube sign-in expired, so the daily job can't upload. Sign in again.") \
                     .classes("text-sm text-warning")
+            elif youtube.is_configured() and not youtube.can_read_schedule():
+                ui.label("Queued videos only skip slots Synergia booked. Sign in again so they also "
+                         "skip videos scheduled in YouTube Studio.").classes("text-sm text-warning")
             with ui.row().classes("gap-2"):
                 if youtube.is_configured():
                     if not t.get("installed"):
@@ -73,7 +76,7 @@ def status_strip() -> None:
                     if waiting:
                         ui.button("Upload due now", icon="cloud_upload", on_click=upload_now) \
                             .props("outline size=sm")
-                    if last.get("needs_sign_in"):
+                    if last.get("needs_sign_in") or not youtube.can_read_schedule():
                         ui.button("Sign in again", icon="login", on_click=sign_in).props("size=sm")
                     if t.get("installed"):
                         ui.button("Turn off daily uploads", on_click=uninstall) \
@@ -94,6 +97,8 @@ def status_strip() -> None:
 
     async def sign_in() -> None:
         if await busy("Signing in to YouTube (a browser tab opens)…", youtube.sign_in) is not None:
+            from synergia.publish import schedule
+            schedule.forget_remote()
             ui.notify("Signed in.", type="positive")
         strip.refresh()
 

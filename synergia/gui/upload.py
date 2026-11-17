@@ -120,6 +120,12 @@ def page(run_path: str = "") -> None:
                         hour = ui.time_input("Time", value="18:00").props("outlined dense")
                     ui.label("Scheduled videos upload now as private and YouTube makes them public "
                              "at that time, so your PC can be off.").classes("text-xs opacity-50")
+                    if not youtube.can_read_schedule():
+                        with ui.row().classes("items-center gap-2"):
+                            ui.label("Free slots only know about videos Synergia scheduled. Sign in again "
+                                     "so it also sees ones scheduled in YouTube Studio.") \
+                                .classes("text-sm text-warning")
+                            ui.button("Sign in again", icon="login", on_click=allow_read).props("size=sm")
                     progress = ui.linear_progress(0, show_value=False).classes("w-full")
                     progress.visible = False
                     status = ui.label().classes("text-sm")
@@ -140,6 +146,17 @@ def page(run_path: str = "") -> None:
 
                     ui.button(f"Upload {len(picks) or ''}".strip(), icon="cloud_upload", on_click=go) \
                         .props("size=lg")
+
+            async def allow_read() -> None:
+                try:
+                    await run.io_bound(youtube.sign_in)
+                except Exception as e:  # noqa: BLE001
+                    ui.notify(f"Sign-in failed: {e}", type="negative")
+                    return
+                sch.forget_remote()
+                ui.notify("Signed in. Free slots now include everything scheduled on YouTube.",
+                          type="positive")
+                when_box.refresh()
 
             when_box()
             show(focus["run"])
