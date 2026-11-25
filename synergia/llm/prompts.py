@@ -134,7 +134,12 @@ Previous reply:
 
 SELF_ID_RULES = """Register: entertainment and self-recognition, not diagnosis. Relatable, specific, a little
 uncomfortably accurate. Never medical or clinical claims, never labels like disorders, never
-anything that could shame someone. Concrete everyday details beat abstract traits."""
+anything that could shame someone. Concrete everyday details beat abstract traits.
+
+Sound like a real person posting, not like an AI or an ad:
+- plain everyday words; no buzzwords like "reveals", "hidden", "unlock", "truly", "energy", "vibe"
+- no dramatic two-part fragments ("Pick one. It says everything.", "Be honest.")
+- no em dashes, no semicolons, no trailing full stop on cover_title"""
 
 
 def checklist_prompt(topic: str, n: int) -> str:
@@ -146,7 +151,7 @@ Viewers count how many of the signs fit them and comment their score.
 {SELF_ID_RULES}
 
 Rules:
-- cover_title: starts with the number {n}, max 12 words, e.g. "{n} signs you're a **high-functioning overthinker**".
+- cover_title: starts with the number {n}, max 12 words, e.g. "{n} signs you **overthink** everything".
 - signs: exactly {n} items, each max 9 words, written in second person as a habit or moment
   ("You rehearse phone calls before making them"). No numbering, no ending period needed.
 - Order them from most common to most specific, so the last ones feel like "how did they know".
@@ -177,7 +182,7 @@ Rules:
 - style: how the options look. One of "numbers", "colours", "shapes", "doors" - pick what fits the topic best.
   For "colours" give every option a "color" (hex like "#4F8CFF", clearly different from each other, readable on a dark background).
   For "shapes" give every option a "shape": one of circle, triangle, square, star, hexagon, diamond (all different).
-- cover_title: the setup, max 12 words, e.g. "Pick a **door**. It reveals your hidden strength."
+- cover_title: the setup in one plain sentence, max 12 words, e.g. "Pick a **door** and see what it says about you"
 - options: exactly {n}. "label" max 3 words (e.g. "Door 1", "Ocean blue", "The triangle").
   "trait" max 25 words: what picking it says about them - flattering but specific, so people share it.
 

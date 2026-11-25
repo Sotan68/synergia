@@ -14,7 +14,6 @@ TEXT = hex_to_rgb(CFG.brand.text)
 ACCENT = hex_to_rgb(CFG.brand.accent)
 ACCENT2 = hex_to_rgb(CFG.brand.accent2)
 MUTED = hex_to_rgb(CFG.brand.muted)
-BG_DARK = hex_to_rgb(CFG.brand.background)
 
 
 @lru_cache(maxsize=256)
@@ -279,38 +278,3 @@ def layout_text(text: str, box: Box, weight: str = "bold", max_size: int = 96,
             x += wl + space
     return TextLayout(placed, size, weight, box, total_h, top, color, accent_color,
                       accent_weight, accent_scale)
-
-
-def draw_label(img: Image.Image, text: str, x: int, y: int, size: int = 34,
-               color=ACCENT, weight: str = "semibold", tracking: float = 0.18,
-               anchor_center: bool = False) -> int:
-    """Draw letter-spaced uppercase label; returns its width."""
-    f = font(weight, size)
-    text = text.upper()
-    spacing = size * tracking
-    total = sum(f.getlength(c) for c in text) + spacing * (len(text) - 1)
-    cx = x - total / 2 if anchor_center else x
-    d = ImageDraw.Draw(img)
-    for c in text:
-        d.text((cx, y), c, font=f, fill=color, anchor="ls")
-        cx += f.getlength(c) + spacing
-    return int(total)
-
-
-def draw_gradient_text(img: Image.Image, xy: tuple[float, float], text: str,
-                       f: ImageFont.FreeTypeFont, c1=ACCENT, c2=ACCENT2,
-                       anchor: str = "ls") -> None:
-    """Draw text filled with a left-to-right gradient c1 -> c2 (in place)."""
-    mask = Image.new("L", img.size, 0)
-    ImageDraw.Draw(mask).text(xy, text, font=f, fill=255, anchor=anchor)
-    bbox = mask.getbbox()
-    if not bbox:
-        return
-    x0, y0, x1, y1 = bbox
-    w = max(1, x1 - x0)
-    grad = Image.new("RGB", (w, y1 - y0))
-    gd = ImageDraw.Draw(grad)
-    for x in range(w):
-        t = x / (w - 1) if w > 1 else 0
-        gd.line([(x, 0), (x, y1 - y0)], fill=tuple(int(a + (b - a) * t) for a, b in zip(c1, c2)))
-    img.paste(grad, (x0, y0), mask.crop(bbox))

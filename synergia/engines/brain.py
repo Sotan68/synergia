@@ -9,24 +9,25 @@ import colorsys
 import math
 import random
 from dataclasses import dataclass, field
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 
 from PIL import Image, ImageDraw
 
 from synergia import history
 from synergia.brand.animate import FINAL, Step, full_frame, render_video
-from synergia.brand.backgrounds import make_background
-from synergia.brand.canvas import CENTRE, SAFE, Box, draw_safe_zone
-from synergia.brand.elements import draw_ring, draw_timer, draw_wordmark, title_card
-from synergia.brand.typography import (ACCENT, ACCENT2, MUTED, TEXT, TextLayout, draw_label, font,
-                                     layout_text)
+from synergia.brand import quiz, typography
+from synergia.brand.canvas import SAFE, Box, draw_safe_zone
+from synergia.brand.elements import draw_ring, draw_timer
+from synergia.brand.quiz import ACCENT, ACCENT2, BOLD, HEAVY, MED, MUTED, SEMI, TEXT
+from synergia.brand.typography import TextLayout, font
 from synergia.config import CFG
 from synergia.output import run_dir, save_meta
 
 W, H = CFG.brand.width, CFG.brand.height
-GAME = Box(CENTRE.x, SAFE.y + 290, CENTRE.w, 720)      # play area (y 540..1260), centred on screen
-TIMER_C = (W // 2, SAFE.bottom - 112)                  # countdown ring centre
+layout_text = partial(typography.layout_text, color=TEXT, accent_color=ACCENT)   # quiz colours
+GAME = Box(quiz.INNER.x, SAFE.y + 290, quiz.INNER.w, 720)   # play area (y 540..1260), inside the card
+TIMER_C = (W // 2, SAFE.bottom - 124)                  # countdown ring centre (inside the card)
 TIMER_R = 52
 REVEAL_HOLD = 1.8                                      # seconds the answer stays on screen
 
@@ -59,6 +60,25 @@ def _paste(im: Image.Image, sprite: Image.Image, x: int, y: int, alpha: float = 
     im.alpha_composite(sprite, (int(x), int(y)))
 
 
+class _Pen:
+    """ImageDraw whose semi-transparent fills really blend onto an RGBA frame.
+
+    Pillow writes RGBA pixels as they are when drawing on an RGBA image (a 40% shadow becomes a
+    40%-opaque hole, which turns solid once the frame goes back to RGB). Shapes go on a clear
+    layer instead, and flush() composites it onto the frame."""
+
+    def __init__(self, im: Image.Image):
+        self.im = im
+        self.layer = Image.new("RGBA", im.size, (0, 0, 0, 0))
+        self.d = ImageDraw.Draw(self.layer)
+
+    def __getattr__(self, name):
+        return getattr(self.d, name)
+
+    def flush(self) -> None:
+        self.im.alpha_composite(self.layer)
+
+
 def _layout(im: Image.Image, lay: TextLayout, alpha: float = 1.0, dy: float = 0.0) -> None:
     for i in range(len(lay.words)):
         spr, x, y = lay.sprite(i)
@@ -74,14 +94,14 @@ def _text_sprite(text: str, weight: str, size: int, color: tuple) -> Image.Image
     return im
 
 
-def _center_text(im, text, cx, cy, weight="bold", size=60, color=TEXT, alpha=1.0, dy=0.0):
+def _center_text(im, text, cx, cy, weight=BOLD, size=60, color=TEXT, alpha=1.0, dy=0.0):
     spr = _text_sprite(text, weight, size, tuple(color))
     _paste(im, spr, cx - spr.width / 2, cy - spr.height / 2 + dy, alpha)
 
 
 def _prompt_layout(text: str) -> TextLayout:
     """A centred question line at the top of the play area ("Which one is missing?")."""
-    return layout_text(text, Box(GAME.x, GAME.y - 10, GAME.w, 110), weight="bold", max_size=66,
+    return layout_text(text, Box(GAME.x, GAME.y - 10, GAME.w, 110), weight=BOLD, max_size=66,
                        min_size=44, align="center", valign="top")
 
 
@@ -99,7 +119,7 @@ def _timer_sfx(start: float, secs: int) -> list[tuple[float, str]]:
 # ---------------------------------------------------------------- games
 @dataclass
 class Game:
-    label: str                         # small caps label above the instruction
+    label: str                         # small label above the instruction ("Stroop test")
     instruction: str                   # typed at the top of the round
     duration: float = 0.0              # seconds after the instruction is typed
     sfx: list[tuple[float, str]] = field(default_factory=list)
@@ -110,14 +130,14 @@ class Game:
 
 
 INKS = {"RED": (255, 77, 77), "BLUE": (70, 140, 255), "GREEN": (60, 205, 95),
-        "YELLOW": (255, 210, 0), "PURPLE": (176, 104, 255), "ORANGE": (255, 140, 20)}
+        "YELLOW": (238, 172, 0), "PURPLE": (176, 104, 255), "ORANGE": (255, 140, 20)}
 
 
 class Stroop(Game):
     """Colour words flash in mismatched ink; say the ink colour out loud."""
 
     def __init__(self, level: float, rng: random.Random):
-        super().__init__("STROOP TEST", "Say the **colour**, not the word.")
+        super().__init__("Stroop test", "Say the **colour**, not the word")
         self.n = 8
         self.start = 0.3
         self.every = round(_lerp(1.0, 0.45, level), 2)
@@ -133,10 +153,9 @@ class Stroop(Game):
         self.duration = self.end + REVEAL_HOLD
         self.sfx = [(self.start + k * self.every, "tick") for k in range(self.n)] + [(self.end, "ding")]
         self.big = 176
-        while max(font("black", self.big).getlength(w) for w in INKS) > GAME.w - 40:
+        while max(font(HEAVY, self.big).getlength(w) for w in INKS) > GAME.w - 40:
             self.big -= 4
         self.recap_q = _prompt_layout("Did you get all **8** right?")
-        self.speed_label = f"{1 / self.every:.1f} WORDS / SEC"
 
     def draw(self, im, t):
         cx, cy = GAME.cx, GAME.cy - 30
@@ -147,25 +166,27 @@ class Stroop(Game):
             local = t - self.start - k * self.every
             w, ink = self.seq[k]
             a = _fade(local, 0, 0.06)
-            _center_text(im, w, cx, cy, "black", self.big, INKS[ink], a, (1 - a) * 14)
+            _center_text(im, w, cx, cy, HEAVY, self.big, INKS[ink], a, (1 - a) * 14)
             # progress dots
             gap = 34
             x0 = cx - gap * (self.n - 1) / 2
-            d = ImageDraw.Draw(im)
+            d = _Pen(im)
             for i in range(self.n):
                 col = TEXT if i <= k else MUTED
                 r = 8 if i == k else 6
                 x = x0 + i * gap
                 d.ellipse([x - r, cy + 190 - r, x + r, cy + 190 + r], fill=col + ((255,) if i <= k else (110,)))
-            _center_text(im, self.speed_label, cx, cy + 250, "semibold", 28, MUTED)
+            d.flush()
             return
         # recap: the whole sequence as a 2 x 4 table in ink colours
         a = _fade(t, self.end, 0.3)
         _layout(im, self.recap_q, a)
-        col_x = (GAME.x + GAME.w * 0.27, GAME.x + GAME.w * 0.73)
+        col_x = (GAME.x + GAME.w * 0.26, GAME.x + GAME.w * 0.74)
+        size = _fit(max(INKS, key=lambda k: font(HEAVY, 84).getlength(k)), HEAVY, 84,
+                    int(GAME.w * 0.46))
         for i, (w, ink) in enumerate(self.seq):
             x, y = col_x[i % 2], GAME.y + 190 + (i // 2) * 128
-            _center_text(im, w, x, y, "black", 84, INKS[ink], a)
+            _center_text(im, w, x, y, HEAVY, size, INKS[ink], a)
 
 
 # Character pairs (base, odd) by difficulty; either order may be used.
@@ -207,7 +228,7 @@ class OddChar(_FindOne):
         tier = PAIRS[min(2, int(level * 3))]
         pair = history.pick_fresh(rng, tier, 1, "brain.pairs")[0]
         base, odd = pair if rng.random() < 0.5 else pair[::-1]
-        super().__init__("ODD ONE OUT", f"Find the **{odd}**.", used={"brain.pairs": [pair]})
+        super().__init__("Odd one out", f"Find the **{odd}**", used={"brain.pairs": [pair]})
         cols, rows = round(_lerp(6, 9, level)), round(_lerp(8, 12, level))
         self.cell = cell = min(GAME.w / cols, GAME.h / rows)
         size = int(cell * 0.74)
@@ -216,7 +237,7 @@ class OddChar(_FindOne):
         self.pos = (rng.randrange(cols), rng.randrange(rows))
         self.grid = Image.new("RGBA", (GAME.w, GAME.h), (0, 0, 0, 0))
         d = ImageDraw.Draw(self.grid)
-        f = font("bold", size)
+        f = font(BOLD, size)
         for c in range(cols):
             for r in range(rows):
                 ch = odd if (c, r) == self.pos else base
@@ -228,13 +249,13 @@ class OddChar(_FindOne):
 
     def draw_answer(self, im, t):
         cx, cy = self.centre
-        _center_text(im, self.odd, cx, cy, "bold", self.size, ACCENT, _fade(t, self.reveal, 0.15))
+        _center_text(im, self.odd, cx, cy, BOLD, self.size, ACCENT, _fade(t, self.reveal, 0.15))
         draw_ring(im, int(cx), int(cy), int(self.cell * 0.56), _ease((t - self.reveal) / 0.45))
 
 
 class OddColour(_FindOne):
     def __init__(self, level: float, rng: random.Random):
-        super().__init__("COLOUR VISION", "Find the **different** colour.")
+        super().__init__("Colour vision", "Spot the **different** shade")
         cols, rows = round(_lerp(4, 6, level)), round(_lerp(5, 8, level))
         cell = min(GAME.w / cols, GAME.h / rows)
         gap = max(8, int(cell * 0.08))
@@ -290,7 +311,7 @@ twig velvet vine waffle walnut wand willow yarn yogurt""".split()
 
 class Memory(Game):
     def __init__(self, level: float, rng: random.Random):
-        super().__init__("MEMORY TEST", "Memorise these **words**.")
+        super().__init__("Memory test", "Remember these **words**")
         n = round(_lerp(6, 9, level))
         self.words = [w.upper() for w in history.pick_fresh(rng, WORDS, n, "brain.words")]
         self.used = {"brain.words": [w.lower() for w in self.words]}
@@ -319,10 +340,10 @@ class Memory(Game):
         rh = min(130, (bottom - top) / rows)
         top += (bottom - top - rows * rh) / 2
         size = 64 if cols == 2 else 52
-        f = font("bold", size)
+        f = font(BOLD, size)
         while max(f.getlength(w) for w in words) > cw - 24:
             size -= 2
-            f = font("bold", size)
+            f = font(BOLD, size)
         im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
         for i, w in enumerate(words):
@@ -347,13 +368,13 @@ class Memory(Game):
         if t >= self.reveal:
             b = _fade(t, self.reveal, 0.3)
             y = GAME.bottom - 40
-            _center_text(im, "MISSING", GAME.cx, y - 82, "semibold", 30, MUTED, b)
-            _center_text(im, self.missing, GAME.cx, y, "black", 92, ACCENT, b, (1 - b) * 16)
+            _center_text(im, "Missing", GAME.cx, y - 82, SEMI, 30, MUTED, b)
+            _center_text(im, self.missing, GAME.cx, y, HEAVY, 92, ACCENT, b, (1 - b) * 16)
 
 
 class CountFlash(Game):
     def __init__(self, level: float, rng: random.Random):
-        super().__init__("SPEED COUNT", "Count the **dots**. Quick.")
+        super().__init__("Speed count", "Count the **dots**")
         lo, hi = round(_lerp(6, 13, level)), round(_lerp(9, 18, level))
         self.n = rng.randint(lo, hi)
         self.flash = round(_lerp(1.4, 0.8, level), 2)
@@ -388,7 +409,7 @@ class CountFlash(Game):
         if t >= self.reveal:
             b = _fade(t, self.reveal, 0.3)
             _paste(im, self.dots, 0, 0, 0.3 * b)
-            _center_text(im, str(self.n), GAME.cx, GAME.cy + 30, "black", 230, ACCENT, b, (1 - b) * 20)
+            _center_text(im, str(self.n), GAME.cx, GAME.cy + 30, HEAVY, 230, ACCENT, b, (1 - b) * 20)
 
 
 @lru_cache(maxsize=1)
@@ -409,17 +430,23 @@ def _cup_sprite() -> Image.Image:
         k = y / im.height
         gd.line([(0, y), (im.width, y)], fill=tuple(int(a + (b - a) * k) for a, b in zip(ACCENT2, ACCENT)) + (255,))
     im.paste(grad, (0, 0), mask)
-    d = ImageDraw.Draw(im)
-    d.ellipse([w * (0.5 - top) * s, 0, w * (0.5 + top) * s, 36 * s], fill=(255, 255, 255, 60))
-    d.rectangle([w * 0.3 * s, 60 * s, w * 0.36 * s, (h - 60) * s], fill=(255, 255, 255, 40))   # shine
+    base = tuple(int(c * 0.62) for c in ACCENT2)          # the cup's closed end, a deeper purple
+    ImageDraw.Draw(im).ellipse([w * (0.5 - top) * s, 0, w * (0.5 + top) * s, 36 * s],
+                               fill=base + (255,))
+    d = _Pen(im)
+    d.ellipse([w * (0.5 - top) * s + 3 * s, 3 * s, w * (0.5 + top) * s - 3 * s, 33 * s],
+              outline=(255, 255, 255, 70), width=2 * s)
+    d.rounded_rectangle([w * 0.3 * s, 60 * s, w * 0.35 * s, (h - 60) * s], radius=3 * s,
+                        fill=(255, 255, 255, 64))           # shine
+    d.flush()
     return im.resize((w, h), Image.LANCZOS)
 
 
 class ShellGame(Game):
-    SLOTS = (-265, 0, 265)
+    SLOTS = (-238, 0, 238)
 
     def __init__(self, level: float, rng: random.Random):
-        super().__init__("SHELL GAME", "Keep your eye on the **ball**.")
+        super().__init__("Shell game", "Follow the **ball**")
         self.ball_cup = rng.randrange(3)
         self.n_swaps = round(_lerp(4, 9, level))
         self.swap_d = round(_lerp(0.62, 0.3, level), 2)
@@ -477,10 +504,11 @@ class ShellGame(Game):
         final_slot = self.states[-1].index(self.ball_cup)
         reveal_k = _ease((t - self.reveal) / 0.35) if t >= self.reveal else 0.0
         ball_x = self._cup_xy(self.ball_cup, t)[0]
-        d = ImageDraw.Draw(im)
-        for c in range(3):   # floor shadows
+        d = _Pen(im)
+        for c in range(3):   # soft floor shadows
             x, _ = self._cup_xy(c, t)
-            d.ellipse([x - 95, self.floor - 12, x + 95, self.floor + 14], fill=(0, 0, 0, int(70 * a)))
+            d.ellipse([x - 95, self.floor - 12, x + 95, self.floor + 14], fill=quiz.TEXT + (int(34 * a),))
+        d.flush()
         br = 40
         _ball = _ball_sprite(br)
         if t < self.t_swaps or t >= self.reveal:
@@ -495,7 +523,7 @@ class ShellGame(Game):
             _layout(im, self.question, b)
             for i, sx in enumerate(self.SLOTS):
                 col = ACCENT if (t >= self.reveal and i == final_slot) else MUTED
-                _center_text(im, str(i + 1), GAME.cx + sx, self.floor + 70, "black", 56, col, b)
+                _center_text(im, str(i + 1), GAME.cx + sx, self.floor + 70, HEAVY, 56, col, b)
         _timer(im, t, self.q + 0.3, self.secs)
 
 
@@ -504,10 +532,12 @@ def _ball_sprite(r: int) -> Image.Image:
     s, pad = 4, 6
     size = (2 * r + 2 * pad) * s
     im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    d.ellipse([pad * s, pad * s, size - pad * s, size - pad * s], fill=(255, 196, 64, 255))
+    ImageDraw.Draw(im).ellipse([pad * s, pad * s, size - pad * s, size - pad * s],
+                               fill=(255, 196, 64, 255))
+    d = _Pen(im)
     d.ellipse([(pad + r * 0.45) * s, (pad + r * 0.35) * s, (pad + r * 0.95) * s, (pad + r * 0.8) * s],
               fill=(255, 255, 255, 120))
+    d.flush()
     return im.resize((size // s, size // s), Image.LANCZOS)
 
 
@@ -520,14 +550,14 @@ def _fit(text: str, weight: str, size: int, width: int) -> int:
 
 def _note(im, text, a, dy=0):
     """Small muted explanation line under the answer."""
-    _center_text(im, text, GAME.cx, GAME.bottom - 60, "semibold", 38, MUTED, a, dy)
+    _center_text(im, text, GAME.cx, GAME.bottom - 60, SEMI, 38, MUTED, a, dy)
 
 
 class QuickMath(_FindOne):
     """An order-of-operations trap: most people go left to right."""
 
     def __init__(self, level: float, rng: random.Random):
-        super().__init__("QUICK MATH", "Solve it. **No calculator.**")
+        super().__init__("Quick math", "Solve it in your **head**")
         n_ops = round(_lerp(2, 4, level))
         while True:
             n_chunks = rng.randint(2, max(2, n_ops))
@@ -557,20 +587,20 @@ class QuickMath(_FindOne):
             if 0 <= total <= 200 and any(per[1:]):
                 break
         self.expr, self.answer = expr, total
-        self.size = _fit(expr, "black", 112, GAME.w - 20)
+        self.size = _fit(expr, HEAVY, 112, GAME.w - 20)
         self._setup_timeline()
 
     def draw_puzzle(self, im, a):
-        _center_text(im, self.expr, GAME.cx, GAME.cy - 90, "black", self.size, TEXT, a)
+        _center_text(im, self.expr, GAME.cx, GAME.cy - 90, HEAVY, self.size, TEXT, a)
 
     def draw(self, im, t):
         super().draw(im, t)
         if t < self.reveal:
-            _center_text(im, "= ?", GAME.cx, GAME.cy + 70, "black", 110, MUTED, _fade(t, 0, self.APPEAR))
+            _center_text(im, "= ?", GAME.cx, GAME.cy + 70, HEAVY, 110, MUTED, _fade(t, 0, self.APPEAR))
 
     def draw_answer(self, im, t):
         b = _fade(t, self.reveal, 0.25)
-        _center_text(im, f"= {self.answer}", GAME.cx, GAME.cy + 70, "black", 130, ACCENT, b,
+        _center_text(im, f"= {self.answer}", GAME.cx, GAME.cy + 70, HEAVY, 130, ACCENT, b,
                      (1 - b) * 16)
         _note(im, "× and ÷ come before + and −", b)
 
@@ -623,20 +653,20 @@ def _sequence(level: float, rng: random.Random) -> tuple[list[int], int, str]:
 
 class NextNumber(_FindOne):
     def __init__(self, level: float, rng: random.Random):
-        super().__init__("NEXT NUMBER", "What comes **next**?")
+        super().__init__("Next number", "What comes **next**?")
         self.terms, self.answer, self.rule = _sequence(level, rng)
         self.prefix = ",  ".join(map(str, self.terms)) + ",  "
-        self.size = _fit(self.prefix + str(max(self.answer, 99)), "black", 104, GAME.w - 20)
+        self.size = _fit(self.prefix + str(max(self.answer, 99)), HEAVY, 104, GAME.w - 20)
         self._setup_timeline()
 
     def _row(self, im, last: str, color, a, b=1.0):
-        f = font("black", self.size)
+        f = font(HEAVY, self.size)
         head = self.prefix.rstrip()
         w0, w1 = f.getlength(self.prefix), f.getlength(last)
         x0 = GAME.cx - (w0 + w1) / 2
         y = GAME.cy - 40
-        _center_text(im, head, x0 + f.getlength(head) / 2, y, "black", self.size, TEXT, a)
-        _center_text(im, last, x0 + w0 + w1 / 2, y, "black", self.size, color, a * b)
+        _center_text(im, head, x0 + f.getlength(head) / 2, y, HEAVY, self.size, TEXT, a)
+        _center_text(im, last, x0 + w0 + w1 / 2, y, HEAVY, self.size, color, a * b)
 
     def draw_puzzle(self, im, a):
         self._row(im, "?", ACCENT2, a)
@@ -660,12 +690,12 @@ class Illusion(_FindOne):
     def __init__(self, level: float, rng: random.Random):
         self.kind = rng.choice(("lines", "circles"))
         self.equal = rng.random() < 0.6
-        super().__init__("OPTICAL ILLUSION", "Which line is **longest**?" if self.kind == "lines"
+        super().__init__("Optical illusion", "Which line is **longest**?" if self.kind == "lines"
                          else "Which orange circle is **bigger**?")
         ss = 3
         grid = Image.new("RGBA", (GAME.w * ss, GAME.h * ss), (0, 0, 0, 0))
         d = ImageDraw.Draw(grid)
-        lab = font("black", 54 * ss)
+        lab = font(HEAVY, 54 * ss)
         delta = 0 if self.equal else round(_lerp(34, 16, level))
         if self.kind == "lines":
             L, fin, w = 420, 44, 9
@@ -690,11 +720,12 @@ class Illusion(_FindOne):
         else:
             cy = GAME.h / 2 - 50
             big_r = 52 + (round(delta * 0.4) if not self.equal else 0)  # the one among big circles
-            # A's ring reaches 142 + 58 = 200 px from its centre, B's 84 + 17 = 101; 114 px apart.
-            # Centre the pair as a whole: total width 2 * 200 + 114 + 2 * 101.
-            ax = (GAME.w - (2 * 200 + 114 + 2 * 101)) / 2 + 200
+            # A's ring reaches 142 + 58 = 200 px from its centre, B's 84 + 17 = 101; the groups
+            # are up to 114 px apart. Centre the pair as a whole.
+            gap = max(50, min(114, GAME.w - 2 * 200 - 2 * 101 - 20))
+            ax = (GAME.w - (2 * 200 + gap + 2 * 101)) / 2 + 200
             for cx, r, ring_r, dist, cnt, name in ((ax, big_r, 58, 142, 6, "A"),
-                                                   (ax + 200 + 114 + 101, 52, 17, 84, 8, "B")):
+                                                   (ax + 200 + gap + 101, 52, 17, 84, 8, "B")):
                 for k in range(cnt):
                     ang = 2 * math.pi * k / cnt
                     x, y = cx + dist * math.cos(ang), cy + dist * math.sin(ang)
@@ -710,18 +741,19 @@ class Illusion(_FindOne):
     def draw_answer(self, im, t):
         b = _fade(t, self.reveal, 0.3)
         if self.kind == "lines":   # dashed guides at the shortest line's ends
-            d = ImageDraw.Draw(im)
+            d = _Pen(im)
             x0, x1 = min(self.ends, key=lambda e: e[1] - e[0])
             for x in (x0, x1):
                 X = GAME.x + x
                 for y in range(GAME.y + 90, GAME.y + 610, 26):
                     d.line([(X, y), (X, y + 14)], fill=ACCENT + (int(255 * b),), width=4)
+            d.flush()
         _note(im, self.answer, b)
 
 
 class Scramble(_FindOne):
     def __init__(self, level: float, rng: random.Random):
-        super().__init__("WORD SCRAMBLE", "Unscramble the **word**.")
+        super().__init__("Word scramble", "Unscramble the **word**")
         lo, hi = round(_lerp(5, 7, level)), round(_lerp(6, 9, level))
         pool = [w for w in WORDS if lo <= len(w) <= hi] or WORDS
         self.word = history.pick_fresh(rng, pool, 1, "brain.words")[0].upper()
@@ -734,21 +766,24 @@ class Scramble(_FindOne):
         self.tile = int(min(104, (GAME.w - 14 * (n - 1)) / n))
         self._setup_timeline()
 
-    def _tiles(self, im, text, y, fill, a):
+    def _tiles(self, im, text, y, fill, a, ink_col=TEXT):
         n, tile, gap = len(text), self.tile, 14
         x0 = GAME.cx - (n * tile + (n - 1) * gap) / 2
-        d = ImageDraw.Draw(im)
-        for i, ch in enumerate(text):
+        d = _Pen(im)
+        for i in range(n):
             x = x0 + i * (tile + gap)
             d.rounded_rectangle([x, y, x + tile, y + tile], tile * 0.2, fill=tuple(fill) + (int(255 * a),))
-            _center_text(im, ch, x + tile / 2, y + tile / 2, "black", int(tile * 0.58), TEXT, a)
+        d.flush()
+        for i, ch in enumerate(text):
+            x = x0 + i * (tile + gap)
+            _center_text(im, ch, x + tile / 2, y + tile / 2, HEAVY, int(tile * 0.58), ink_col, a)
 
     def draw_puzzle(self, im, a):
-        self._tiles(im, self.letters, GAME.cy - 170, (52, 58, 110), a)
+        self._tiles(im, self.letters, GAME.cy - 170, (234, 230, 255), a)       # lavender tint
 
     def draw_answer(self, im, t):
         b = _fade(t, self.reveal, 0.3)
-        self._tiles(im, self.word, GAME.cy + 40, tuple(int(c * 0.7) for c in ACCENT), b)
+        self._tiles(im, self.word, GAME.cy + 40, ACCENT, b, (255, 255, 255))
 
 
 GAMES = {"stroop": Stroop, "odd_char": OddChar, "odd_colour": OddColour, "memory": Memory,
@@ -758,30 +793,27 @@ GAME_TITLES = {"stroop": "Stroop test", "odd_char": "Odd one out", "odd_colour":
                "memory": "Memory test", "count": "Speed count", "shell": "Shell game", "math": "Quick math",
                "sequence": "Next number", "illusion": "Optical illusion", "scramble": "Word scramble"}
 
+# Written like a person would say them: short, no trailing full stops, no "X. Y." beats.
 HOOKS = [
-    "Only **3%** pass all {n} rounds.", "Your brain has **{n} rounds** to prove itself.",
-    "Most people fail round **{last}**.", "Can your brain survive **{n} rounds**?",
-    "This test knows how **sharp** you are.", "Your **brain age** in 40 seconds.",
-    "Pass all {n} and you're in the **top 5%**.", "Don't blink. **Seriously.**",
-    "{n} rounds. Each one **harder**.", "Let's see how **focused** you really are.",
-    "Your attention span vs. **{n} rounds**.", "Only **sharp minds** finish this.",
-    "Round {last} breaks **almost everyone**.", "Test your brain in **40 seconds**.",
-    "Are you **smarter** than your phone thinks?", "Nobody gets round **{last}** on the first try.",
-    "How fast is your **brain** today?", "Prove your brain is **awake**.",
-    "{n} tests. **Zero** excuses.", "This is harder than it **looks**.",
-    "A quick **brain check** before you scroll.", "Score **{n}/{n}** and you're a genius.",
-    "Bet you can't pass **all {n}**.", "Your focus, **tested**.", "Is your brain **faster** than average?",
-    "Warm up your **brain** in 40 seconds.", "Only **1 in 20** gets them all.",
-    "Your brain vs. **{n} tiny tests**.", "Speed. Memory. **Focus.**", "Ready? Your brain **isn't**.",
+    "Only **3%** get all {n} right", "Most people fail round **{last}**",
+    "Bet you can't get all **{n}**", "Can you pass all **{n}** rounds?",
+    "Let's see how **sharp** you are", "Round **{last}** gets almost everyone",
+    "Nobody gets round **{last}** on the first try", "Get all {n} and you're in the **top 5%**",
+    "This is harder than it **looks**", "How fast is your **brain** today?",
+    "Don't scroll until you finish all **{n}**", "Only **1 in 20** people get them all",
+    "You won't get round **{last}**", "Try this without **pausing**",
+    "Is your brain **faster** than average?", "Quick brain test before you **scroll**",
+    "Get {n}/{n} and you're a **genius**", "Test your focus in **40 seconds**",
+    "Be honest about your **score**", "Your attention span is about to get **tested**",
 ]
 TITLES = [
     "Only 3% pass this brain test", "Can you pass all {n} rounds?", "Test your brain in 40 seconds",
-    "How sharp is your brain? ({n} rounds)", "Most people fail round {last}", "Brain test: are you top 5%?",
+    "How sharp is your brain? ({n} rounds)", "Most people fail round {last}", "Are you in the top 5%?",
 ]
 CAPTIONS = [
-    "Comment your score out of {n}. Be honest.", "Which round got you? Tell me in the comments.",
-    "Send this to the smartest person you know.", "Score below {n}? Try again before you scroll.",
-    "Drop your score. Let's see who's sharpest.",
+    "Comment your score out of {n}", "Which round got you? Tell me in the comments",
+    "Send this to the smartest person you know", "Got less than {n}? Try again before you scroll",
+    "Drop your score, let's see who's sharpest",
 ]
 HASHTAGS = ["#braintest", "#brainteaser", "#iqtest", "#puzzle", "#challenge", "#psychology", "#focus",
             "#memorytest", "#mindgames"]
@@ -790,13 +822,12 @@ HASHTAGS = ["#braintest", "#brainteaser", "#iqtest", "#puzzle", "#challenge", "#
 # ---------------------------------------------------------------- steps
 def _round_step(game: Game, idx: int, n: int, bg: Image.Image) -> tuple[Step, float]:
     base = bg.copy()
-    draw_wordmark(base, align="center", cx=W // 2)
-    label = f"ROUND {idx + 1}/{n}  ·  {game.label}"
-    lw = draw_label(Image.new("RGB", (1, 1)), label, 0, 0, size=30, tracking=0.2)
-    draw_label(base, label, W // 2 - lw // 2, SAFE.y + 36, size=30, color=ACCENT2, tracking=0.2)
-    # max 2 lines that end well above the play area's question line
-    instr = layout_text(game.instruction, Box(CENTRE.x, SAFE.y + 76, CENTRE.w, 150), weight="bold",
-                        max_size=66, min_size=46, align="center", valign="top")
+    quiz.header(base, game.label, num=idx + 1)
+    quiz.footer(base, idx + 2, n + 2)
+    # one line if it fits at >= 44 px (the box is one line tall), so it never runs into the
+    # play area's question line
+    instr = layout_text(game.instruction, Box(GAME.x, quiz.CONTENT_TOP + 6, GAME.w, 84),
+                        weight=BOLD, max_size=64, min_size=44, align="center", valign="top")
     n_chars = sum(len(w.text) + 1 for w in instr.words)
     start, window = 0.15, max(0.6, min(1.3, n_chars * 0.035))
     t0 = start + window + 0.35
@@ -813,9 +844,12 @@ def _round_step(game: Game, idx: int, n: int, bg: Image.Image) -> tuple[Step, fl
     return step, t0 + game.duration
 
 
-def _text_step(bg: Image.Image, label: str, big: str, small: str) -> tuple[Step, float]:
+def _sheet_step(bg: Image.Image, head: str, big: str, small: str, total: int | None,
+                page: int, pages: int, right: str | None = None) -> tuple[Step, float]:
+    """Cover / ending: header, big line, small line, and the 'Your score ___ / 4' line."""
     base = bg.copy()
-    big_l, small_l = title_card(base, label, big, small, 116, 64, 56, 38, 34, 0.24)
+    big_l, small_l = quiz.title_sheet(base, head, big, small, total, right, page, pages,
+                                     big_max=116, big_min=64)
     chars = sum(len(w.text) + 1 for lay in (big_l, small_l) for w in lay.words)
     window = max(0.9, min(2.0, chars * 0.035))
     step = Step(base, [big_l, small_l], type_start=0.2, type_window=window)
@@ -839,14 +873,15 @@ def build(seed: int | None = None) -> tuple[list[Step], list[float], dict]:
     fmt = {"n": n, "last": n}
     hook = history.pick_fresh(rng, HOOKS, 1, "brain.hooks")[0]
     steps, durs = [], []
-    s, d = _text_step(make_background(seed, variant=0), "BRAIN TEST", hook.format(**fmt),
-                      f"{n} rounds  ·  {int(_cfg('timer_seconds', 4))} seconds each")
+    s, d = _sheet_step(quiz.background(seed, variant=0), "Brain test", hook.format(**fmt),
+                       "Keep score as you go", n, 1, n + 2)
     steps.append(s), durs.append(d)
     for i, g in enumerate(games):
-        s, d = _round_step(g, i, n, make_background(seed, variant=i + 1))
+        s, d = _round_step(g, i, n, quiz.background(seed, variant=i + 1))
         steps.append(s), durs.append(d)
-    s, d = _text_step(make_background(seed, variant=n + 1), "TIME'S UP",
-                      "How many did you **pass**?", f"Comment your score: **?/{n}**")
+    s, d = _sheet_step(quiz.background(seed, variant=n + 1), "Brain test",
+                       "How many did you get **right**?", "Comment your score below", n,
+                       n + 2, n + 2)
     steps.append(s), durs.append(d)
 
     used: dict[str, list] = {"brain.hooks": [hook], "brain.games": list(keys)}

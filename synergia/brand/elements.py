@@ -1,20 +1,15 @@
-"""Shared brand elements (logo mark, wordmark lockup)."""
+"""Shared brand elements: the logo mark, and the animated pieces of the D / E quiz slides."""
 from __future__ import annotations
 
 from functools import lru_cache
 
 from PIL import Image, ImageDraw
 
-from synergia.brand.canvas import BODY, W, Box, centred_top, safe_for
-from synergia.brand.typography import ACCENT2, draw_label, font
-from synergia.config import hex_to_rgb, CFG
+from synergia.config import hex_to_rgb
 
 # Colours sampled from "logo ideas/05 · Overlap, mark only".
 MARK_BLUE = hex_to_rgb("#5B9CFF")
 MARK_PURPLE = hex_to_rgb("#A78BFA")
-
-WORDMARK_SIZE = 30
-WORDMARK_TRACKING = 0.45
 
 
 @lru_cache(maxsize=8)
@@ -62,60 +57,8 @@ def logo_mark(height: int) -> Image.Image:
     return out.resize((round(w / ss), round(h / ss)), Image.LANCZOS)
 
 
-def footer_baseline(img: Image.Image) -> int:
-    """Baseline of the footer row (wordmark, swipe cue) at the bottom of the safe zone."""
-    return safe_for(img.height).bottom - 6
-
-
-def draw_wordmark(img: Image.Image, align: str = "left", cx: int | None = None) -> None:
-    """Logo mark + letter-spaced SYNERGIA as a footer at the bottom of the safe zone.
-
-    align="left" lines it up with the left edge of the text column; "center" for centred slides
-    (centred on the safe zone, or on `cx` when given).
-    """
-    box = safe_for(img.height)
-    baseline = footer_baseline(img)
-    mark = logo_mark(34)
-    f = font("semibold", WORDMARK_SIZE)
-    name = CFG.brand.name.upper()
-    text_w = sum(f.getlength(c) for c in name) + WORDMARK_SIZE * WORDMARK_TRACKING * (len(name) - 1)
-    gap = 18
-    total = mark.width + gap + text_w
-    # The mark sprite has ~1px of transparent padding; nudge so the ring touches the text edge.
-    x = box.x - 1 if align == "left" else round((box.cx if cx is None else cx) - total / 2)
-    cap_mid = baseline - round(WORDMARK_SIZE * 0.36)   # optical middle of the capitals
-    img.paste(mark, (x, cap_mid - mark.height // 2), mark)
-    draw_label(img, name, x + mark.width + gap, baseline, size=WORDMARK_SIZE, color=ACCENT2,
-               weight="semibold", tracking=WORDMARK_TRACKING)
-
-
 # ---------------------------------------------------------------- animated pieces (D / E)
 SS = 4   # supersampling factor for smooth arcs and strokes
-
-
-def title_card(img: Image.Image, label: str, big: str, small: str, big_max: int, big_min: int,
-               small_max: int, small_min: int, label_size: int, tracking: float):
-    """Cover / outro card for D and E: small caps label, big line, muted small line.
-
-    The three are centred as one block, on the screen's centre line and vertically in the body
-    area. Draws the label and the centred wordmark onto img (in place); returns the big and small
-    text layouts, which the caller types out."""
-    from synergia.brand.typography import MUTED, layout_text
-
-    big_l = layout_text(big, Box(BODY.x, 0, BODY.w, 460), weight="black", max_size=big_max,
-                        min_size=big_min, align="center", valign="top", line_spacing=1.1)
-    small_l = layout_text(small, Box(BODY.x, 0, BODY.w, 200), weight="medium", max_size=small_max,
-                          min_size=small_min, align="center", valign="top", color=MUTED)
-    lab_gap, gap = 70, 60                     # label baseline -> big text top; big -> small
-    cap = round(label_size * 0.73)
-    top = centred_top(cap + lab_gap + big_l.height + gap + small_l.height)
-    big_l = big_l.moved(dy=top + cap + lab_gap)
-    small_l = small_l.moved(dy=big_l.top + big_l.height + gap)
-    draw_wordmark(img, align="center", cx=W // 2)
-    lw = draw_label(Image.new("RGB", (1, 1)), label, 0, 0, size=label_size, tracking=tracking)
-    draw_label(img, label, W // 2 - lw // 2, big_l.top - lab_gap, size=label_size, color=ACCENT2,
-               tracking=tracking)
-    return big_l, small_l
 
 
 def _rgba(col, alpha: float = 1.0) -> tuple[int, int, int, int]:
@@ -141,7 +84,8 @@ def _patch(img: Image.Image, x0: int, y0: int, w: int, h: int, draw_fn) -> Image
 def draw_timer(img: Image.Image, cx: int, cy: int, r: int, frac: float, secs_left: int,
                alpha: float = 1.0) -> Image.Image:
     """Countdown ring: a track plus an accent arc covering `frac` (1 -> 0) and the seconds left."""
-    from synergia.brand.typography import ACCENT, MUTED, TEXT, font
+    from synergia.brand.quiz import ACCENT, HEAVY, MUTED, TEXT
+    from synergia.brand.typography import font
 
     width = max(6, r // 6)
     pad = width + 4
@@ -153,7 +97,7 @@ def draw_timer(img: Image.Image, cx: int, cy: int, r: int, frac: float, secs_lef
         if frac > 0:
             col = ACCENT if frac > 0.34 else MARK_PURPLE
             d.arc(box, -90, -90 + 360 * frac, fill=_rgba(col, alpha), width=width * s)
-        f = font("black", int(r * 0.95) * s)
+        f = font(HEAVY, int(r * 0.95) * s)
         d.text((size * s / 2, size * s / 2), str(secs_left), font=f, fill=_rgba(TEXT, alpha),
                anchor="mm")
 
@@ -165,7 +109,7 @@ def draw_ring(img: Image.Image, cx: int, cy: int, r: int, progress: float,
     """'Found it' circle that draws itself in clockwise (progress 0..1)."""
     if progress <= 0:
         return img
-    from synergia.brand.typography import ACCENT
+    from synergia.brand.quiz import ACCENT
     col = color or ACCENT
     pad = width + 4
     size = 2 * (r + pad)
@@ -180,7 +124,7 @@ def draw_ring(img: Image.Image, cx: int, cy: int, r: int, progress: float,
 def draw_check(img: Image.Image, x: int, y: int, size: int, progress: float,
                alpha: float = 1.0) -> Image.Image:
     """Checkbox at (x, y) top-left; progress 0 = empty box, 1 = filled with a full tick."""
-    from synergia.brand.typography import ACCENT, BG_DARK, MUTED
+    from synergia.brand.quiz import ACCENT, BG as SURFACE, MUTED
 
     p = max(0.0, min(1.0, progress))
     pad = 4
@@ -205,6 +149,6 @@ def draw_check(img: Image.Image, x: int, y: int, size: int, progress: float,
             else:
                 k = (reach - l1) / l2
                 line += [pts[1], (pts[1][0] + (pts[2][0] - pts[1][0]) * k, pts[1][1] + (pts[2][1] - pts[1][1]) * k)]
-            d.line(line, fill=_rgba(BG_DARK, alpha), width=max(4, size // 8) * s, joint="curve")
+            d.line(line, fill=_rgba(SURFACE, alpha), width=max(4, size // 8) * s, joint="curve")
 
     return _patch(img, x - pad, y - pad, size + 2 * pad, size + 2 * pad, draw)

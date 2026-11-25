@@ -1,18 +1,15 @@
 # Synergia configuration — every visual/tunable lives here. Edit freely.
 
+# Name, canvas size, and the dark colours used by Engine C's subtitles and the browser interface.
 [brand]
 name = "SYNERGIA"
 width = 1080
 height = 1920
 background = "#0A0B1A"
-# Tints mixed into procedural backgrounds (one is picked per run).
-background_tints = ["#1A1E4A", "#241A4E", "#14234A", "#2A1C52"]
 text = "#F5F7FF"          # cool white
 accent = "#6FA8FF"        # electric blue (highlighted words)
 accent2 = "#A78BFA"       # soft purple (labels, rules, wordmark)
 muted = "#8B90B8"         # secondary text (labels, cues)
-grain = 0.025             # film-grain strength (0 = off)
-vignette = 0.55           # 0 = off, 1 = strong
 
 [fonts]
 bold = "assets/fonts/Inter-Bold.ttf"
@@ -25,6 +22,11 @@ serif_italic = "assets/fonts/InstrumentSerif-Italic.ttf"
 display_medium = "assets/fonts/InterDisplay-Medium.ttf"
 display_semibold = "assets/fonts/InterDisplay-SemiBold.ttf"
 display_bold = "assets/fonts/InterDisplay-Bold.ttf"
+# Engines D / E quiz slides: Bricolage Grotesque (a variable font) in four weights.
+quiz_heavy = "assets/fonts/BricolageGrotesque.ttf|Weight=800,Optical Size=48"
+quiz_bold = "assets/fonts/BricolageGrotesque.ttf|Weight=700,Optical Size=48"
+quiz_semibold = "assets/fonts/BricolageGrotesque.ttf|Weight=600,Optical Size=48"
+quiz_medium = "assets/fonts/BricolageGrotesque.ttf|Weight=500,Optical Size=48"
 # Engine A's paragraph slides (2 and 3): one font for the header and the text.
 # A variable font takes its axes after "|", e.g. "assets/fonts/X.ttf|Weight=500".
 paragraph = "assets/fonts/Newsreader.ttf|Weight=480,Optical Size=36"
@@ -40,6 +42,18 @@ accent2 = "#7457F5"       # numbers and small labels (purple)
 grain = 0.026             # paper grain (0 = off)
 mottle = 0.016            # soft, cloudy unevenness of the paper (0 = off)
 tint = 0.035              # faint blue / lavender wash across the sheet (0 = off)
+
+# Engine D / E look: light "test sheet" slides. style = "sheet" (paper + white card),
+# "grid" (graph paper) or "cobalt" (blue background + white card).
+[quiz]
+style = "sheet"
+surface = "#FFFFFF"       # card colour
+text = "#14143C"          # navy
+muted = "#6A6E96"         # secondary text, prompts, small notes
+accent = "#2F4BFF"        # highlighted words, answers, timer (blue)
+accent2 = "#7457F5"       # numbers, score, small details (purple)
+cobalt = "#2A45F2"        # "cobalt" style: top of the screen
+cobalt2 = "#4A2FD6"       # "cobalt" style: bottom of the screen
 
 # Safe zone for TikTok / Reels / Shorts UI (pixels on the 1080x1920 canvas).
 [safe_zone]

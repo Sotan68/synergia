@@ -33,8 +33,8 @@ LISTICLE = {
 }
 
 CHECKLIST = {
-    "title": "7 signs you're a high-functioning overthinker",
-    "cover_title": "7 signs you're a **high-functioning overthinker**",
+    "title": "7 signs you overthink everything",
+    "cover_title": "7 signs you **overthink** everything",
     "signs": [
         "You rehearse phone calls before making them",
         "You reread your texts after sending them",
@@ -49,8 +49,8 @@ CHECKLIST = {
 }
 
 PICK = {
-    "title": "Pick a door. It reveals your hidden strength",
-    "cover_title": "Pick a **door**. It reveals your hidden strength.",
+    "title": "Pick a door and see what it says about you",
+    "cover_title": "Pick a **door** and see what it says about you",
     "style": "doors",
     "options": [
         {"label": "Door 1", "trait": "You see what others miss. People come to you when something feels off, because you **always notice first**."},

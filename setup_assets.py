@@ -15,14 +15,16 @@ MODELS = ROOT / "assets" / "models"
 INTER_ZIP = "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip"
 WANTED = ["Inter-Bold.ttf", "Inter-SemiBold.ttf", "Inter-Medium.ttf", "Inter-Black.ttf",
           "InterDisplay-Medium.ttf", "InterDisplay-SemiBold.ttf", "InterDisplay-Bold.ttf"]
-# From the Google Fonts repo: Instrument Serif (headlines on the Engine A / B "paper" slides) and
-# Newsreader (Engine A's paragraph slides).
+# From the Google Fonts repo: Instrument Serif (headlines on the Engine A / B "paper" slides),
+# Newsreader (Engine A's paragraph slides) and Bricolage Grotesque (Engine D / E quiz slides).
 GF = "https://github.com/google/fonts/raw/main/ofl/"
 SERIF = {"InstrumentSerif-Regular.ttf": "instrumentserif/InstrumentSerif-Regular.ttf",
          "InstrumentSerif-Italic.ttf": "instrumentserif/InstrumentSerif-Italic.ttf",
          "InstrumentSerif-OFL.txt": "instrumentserif/OFL.txt",
          "Newsreader.ttf": "newsreader/Newsreader%5Bopsz,wght%5D.ttf",
-         "Newsreader-OFL.txt": "newsreader/OFL.txt"}
+         "Newsreader-OFL.txt": "newsreader/OFL.txt",
+         "BricolageGrotesque.ttf": "bricolagegrotesque/BricolageGrotesque%5Bopsz,wdth,wght%5D.ttf",
+         "BricolageGrotesque-OFL.txt": "bricolagegrotesque/OFL.txt"}
 YUNET_URLS = [
     "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
     "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
