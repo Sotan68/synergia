@@ -1,4 +1,5 @@
-"""One-time download of free assets: Inter font (OFL) and the YuNet face detector (Apache-2.0)."""
+"""One-time download of free assets: Inter + Inter Display and Instrument Serif fonts (OFL) and the
+YuNet face detector (Apache-2.0)."""
 from __future__ import annotations
 
 import io
@@ -12,7 +13,16 @@ FONTS = ROOT / "assets" / "fonts"
 MODELS = ROOT / "assets" / "models"
 
 INTER_ZIP = "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip"
-WANTED = ["Inter-Bold.ttf", "Inter-SemiBold.ttf", "Inter-Medium.ttf", "Inter-Black.ttf"]
+WANTED = ["Inter-Bold.ttf", "Inter-SemiBold.ttf", "Inter-Medium.ttf", "Inter-Black.ttf",
+          "InterDisplay-Medium.ttf", "InterDisplay-SemiBold.ttf", "InterDisplay-Bold.ttf"]
+# From the Google Fonts repo: Instrument Serif (headlines on the Engine A / B "paper" slides) and
+# Newsreader (Engine A's paragraph slides).
+GF = "https://github.com/google/fonts/raw/main/ofl/"
+SERIF = {"InstrumentSerif-Regular.ttf": "instrumentserif/InstrumentSerif-Regular.ttf",
+         "InstrumentSerif-Italic.ttf": "instrumentserif/InstrumentSerif-Italic.ttf",
+         "InstrumentSerif-OFL.txt": "instrumentserif/OFL.txt",
+         "Newsreader.ttf": "newsreader/Newsreader%5Bopsz,wght%5D.ttf",
+         "Newsreader-OFL.txt": "newsreader/OFL.txt"}
 YUNET_URLS = [
     "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
     "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
@@ -28,6 +38,10 @@ def fetch(url: str) -> bytes:
 
 def setup_fonts() -> None:
     FONTS.mkdir(parents=True, exist_ok=True)
+    for name, remote in SERIF.items():
+        if not (FONTS / name).exists():
+            print(f"↓ {name}")
+            (FONTS / name).write_bytes(fetch(GF + remote))
     if all((FONTS / f).exists() for f in WANTED):
         print("✓ fonts already present")
         return

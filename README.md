@@ -66,7 +66,7 @@ Either way, you then review the script, edit any field (mark highlighted words w
 - **Typing sound (A, B, D and E videos):** real recorded keystrokes (`assets/sounds/keys/`, CC0) are synced to each letter as it appears. To use a different keyboard, swap in your own 16-bit `.wav` files. To change or turn it off, use `[sound]` in `config.toml`.
 - **Background music (A and B videos):** each video gets a random CC0 lofi track from `assets/music/`, volume-matched, faded in and out, and mixed under the typing. Credits are in `assets/music/LICENSE.txt`, and the track used is saved as `music` in `script.json`. To add your own tracks, drop `.mp3`/`.ogg` files into that folder. Volume and on/off are in `[sound]` in `config.toml`.
 - **Clip length (C):** every clip stays under 1 minute. Anything longer is trimmed at the last sentence that ends in time (`hard_max_seconds`).
-- **Engines A and B:** every slide has a footer with the Overlap logo mark and the SYNERGIA wordmark. It lines up with the text: left-aligned on most slides, centred on the centred "Shift" slide.
+- **Engines A and B (look):** a textured off-white "paper" sheet (grain, soft unevenness and a faint blue/lavender wash), navy text and blue/purple accents. Headlines are Instrument Serif with **highlighted** words in blue italic; Engine A's two paragraph slides use Newsreader only, with highlighted words in blue. Every slide has a footer with the logo mark, "Synergia" and a page count (left-aligned; centred on A's last slide). Colours and texture strength are in `[paper]` in `config.toml`, fonts in `[fonts]`.
 
 ## Uploading to YouTube
 Synergia can upload a rendered video as a YouTube Short through the official YouTube Data API. It's free, and nothing is posted without you confirming it.

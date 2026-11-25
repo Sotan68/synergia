@@ -16,8 +16,8 @@ from PIL import Image, ImageDraw
 from synergia import history
 from synergia.brand.animate import Step, full_frame, render_video
 from synergia.brand.backgrounds import make_background
-from synergia.brand.canvas import SAFE, Box, draw_safe_zone
-from synergia.brand.elements import _patch, draw_check, draw_timer, draw_wordmark
+from synergia.brand.canvas import BODY, SAFE, Box, centred_top, draw_safe_zone
+from synergia.brand.elements import _patch, draw_check, draw_timer, draw_wordmark, title_card
 from synergia.brand.typography import (ACCENT, ACCENT2, MUTED, TEXT, TextLayout, draw_label, font,
                                      layout_text, strip_markup)
 from synergia.config import CFG, hex_to_rgb
@@ -50,13 +50,7 @@ def _label_c(img: Image.Image, text: str, y: int, size: int = 32, color=ACCENT2)
 
 def _text_step(bg: Image.Image, label: str, big: str, small: str) -> tuple[Step, float]:
     base = bg.copy()
-    draw_wordmark(base, align="center")
-    big_l = layout_text(big, Box(SAFE.x, SAFE.y + 260, SAFE.w, 460), weight="black", max_size=112,
-                        min_size=60, align="center", valign="bottom", line_spacing=1.1)
-    small_l = layout_text(small, Box(SAFE.x, big_l.top + big_l.height + 60, SAFE.w, 200),
-                          weight="medium", max_size=54, min_size=36, align="center", valign="top",
-                          color=MUTED)
-    _label_c(base, label, big_l.top - 70, 34)
+    big_l, small_l = title_card(base, label, big, small, 112, 60, 54, 36, 34, 0.22)
     window = _window(_chars(big_l, small_l), 1.0, 2.2)
     return Step(base, [big_l, small_l], type_start=0.2, type_window=window), 0.2 + window + 1.6
 
@@ -119,39 +113,50 @@ def _checklist_steps(data: dict, seed: int) -> tuple[list[Step], list[float]]:
                       data["cover_title"], "Count them. **Be honest.**")
     steps.append(s), durs.append(d)
 
+    # The list is left-aligned, but the header + rows block is centred on screen as a whole.
     bg = make_background(seed, variant=1)
-    header = layout_text(data["cover_title"], Box(SAFE.x, SAFE.y + 20, SAFE.w, 190), weight="bold",
+    header = layout_text(data["cover_title"], Box(BODY.x, 0, BODY.w, 190), weight="bold",
                          max_size=60, min_size=40, valign="top", line_spacing=1.12)
-    top = header.top + header.height + 60
-    area_h = SAFE.bottom - 120 - top
-    row_h = min(150, area_h // n)
-    box = int(min(58, row_h * 0.5))
-    text_x = SAFE.x + box + 30
-    rows = [layout_text(sg, Box(text_x, top + i * row_h + 6, SAFE.right - text_x, row_h - 12),
-                        weight="bold", max_size=50, min_size=30, valign="center", line_spacing=1.12)
-            for i, sg in enumerate(signs)]
+    head_gap, row_gap = 56, 26
+    area_h = BODY.h - header.height - head_gap
+    slot = min(150, area_h // n)
+    box = int(min(58, slot * 0.5))
+    text_w = BODY.w - box - 30
+    rows = [layout_text(sg, Box(0, 0, text_w, slot - row_gap), weight="bold", max_size=50,
+                        min_size=30, valign="top", line_spacing=1.12) for sg in signs]
     # one font size for every row, so the list looks even
     size = min(r.size for r in rows)
-    rows = [layout_text(sg, Box(text_x, top + i * row_h + 6, SAFE.right - text_x, row_h - 12),
-                        weight="bold", max_size=size, min_size=size, valign="center", line_spacing=1.12)
-            for i, sg in enumerate(signs)]
-    box_y = [top + i * row_h + (row_h - box) // 2 for i in range(n)]
+    rows = [layout_text(sg, Box(0, 0, text_w, slot - row_gap), weight="bold", max_size=size,
+                        min_size=size, valign="top", line_spacing=1.12) for sg in signs]
+    row_hs = [max(r.height, box) for r in rows]
+    block_h = header.height + head_gap + sum(row_hs) + row_gap * (n - 1)
+    block_w = max(header.width, box + 30 + max(r.width for r in rows))
+    left = BODY.x + (BODY.w - block_w) // 2
+    y = centred_top(block_h)
+    header = header.moved(dx=left - BODY.x, dy=y)
+    y += header.height + head_gap
+    text_x = left + box + 30
+    box_y = []
+    for i, r in enumerate(rows):
+        rows[i] = r.moved(dx=text_x, dy=y + (row_hs[i] - r.height) // 2)
+        box_y.append(y + (row_hs[i] - box) // 2)
+        y += row_hs[i] + row_gap
 
     for i in range(n):
         base = bg.copy()
-        draw_wordmark(base)
+        draw_wordmark(base, align="center", cx=W // 2)
         base = header.draw(base)
         for j in range(i):
             base = rows[j].draw(base)
-            base = draw_check(base, SAFE.x, box_y[j], box, 1.0)
+            base = draw_check(base, left, box_y[j], box, 1.0)
         window = _window(_chars(rows[i]), 0.8, 1.7)
         start = 0.15
         tick = start + window + 0.15
 
         def overlay(img, t, i=i, tick=tick):
-            img = draw_check(img, SAFE.x, box_y[i], box, 0.0, alpha=min(1.0, t / 0.2))
+            img = draw_check(img, left, box_y[i], box, 0.0, alpha=min(1.0, t / 0.2))
             if t >= tick:
-                img = draw_check(img, SAFE.x, box_y[i], box, min(1.0, (t - tick) / 0.25))
+                img = draw_check(img, left, box_y[i], box, min(1.0, (t - tick) / 0.25))
             return img
 
         steps.append(Step(base, [rows[i]], overlay=overlay, sfx=[(tick, "pop")],
@@ -310,31 +315,41 @@ def _pick_steps(data: dict, seed: int) -> tuple[list[Step], list[float]]:
     steps, durs = [], []
 
     # ---- cover: setup line typed, then cards pop in, then a short timer
+    # Title, cards, prompt and the timer's space are centred as one block.
     base = make_background(seed, variant=0)
-    draw_wordmark(base, align="center")
-    title = layout_text(data["cover_title"], Box(SAFE.x, SAFE.y + 40, SAFE.w, 220), weight="black",
+    draw_wordmark(base, align="center", cx=W // 2)
+    title = layout_text(data["cover_title"], Box(BODY.x, 0, BODY.w, 220), weight="black",
                         max_size=76, min_size=48, align="center", valign="top", line_spacing=1.1)
-    area = Box(SAFE.x, title.top + title.height + 60, SAFE.w, 0)
+    gap = 30
     if n == 4:
-        cw, ch, gap = 405, 290, 30
-        cells = [(area.x + (k % 2) * (cw + gap), area.y + (k // 2) * (ch + gap)) for k in range(4)]
+        cw, ch = (BODY.w - gap) // 2, 290
+        grid_w, grid_h = 2 * cw + gap, 2 * ch + gap
     else:
-        cw, ch, gap = 260, 420, 30
-        cells = [(area.x + k * (cw + gap), area.y) for k in range(3)]
-    grid_bottom = max(y for _, y in cells) + ch
+        cw, ch = (BODY.w - 2 * gap) // 3, 420
+        grid_w, grid_h = 3 * cw + 2 * gap, ch
+    prompt = layout_text("Pick one. **Remember it.**", Box(BODY.x, 0, BODY.w, 80),
+                         weight="semibold", max_size=50, min_size=36, align="center", valign="top",
+                         color=MUTED)
+    timer_r, timer_gap = 50, 95            # timer centre sits timer_gap below the prompt
+    block_h = title.height + 60 + grid_h + 34 + prompt.height + timer_gap + timer_r + 12
+    top = centred_top(block_h)
+    title = title.moved(dy=top)
+    gx, gy = W // 2 - grid_w // 2, title.top + title.height + 60
+    if n == 4:
+        cells = [(gx + (k % 2) * (cw + gap), gy + (k // 2) * (ch + gap)) for k in range(4)]
+    else:
+        cells = [(gx + k * (cw + gap), gy) for k in range(3)]
+    prompt = prompt.moved(dy=gy + grid_h + 34)
     labels = [layout_text(o["label"], Box(x + 16, y + ch - 96, cw - 32, 70), weight="bold",
                           max_size=44, min_size=28, align="center", valign="center")
               for (x, y), o in zip(cells, opts)]
-    prompt = layout_text("Pick one. **Remember it.**", Box(SAFE.x, grid_bottom + 34, SAFE.w, 80),
-                         weight="semibold", max_size=50, min_size=36, align="center", valign="top",
-                         color=MUTED)
     window = _window(_chars(title), 1.0, 2.0)
     t_cards = 0.15 + window + 0.3
     stagger = 0.18
     t_prompt = t_cards + n * stagger + 0.2
     secs = int(_cfg("pick_timer_seconds", 3))
     t_timer = t_prompt + 0.35
-    timer_c = (W // 2, min(SAFE.bottom - 110, int(prompt.top + prompt.height + 95)))
+    timer_c = (W // 2, min(SAFE.bottom - 110, prompt.top + prompt.height + timer_gap))
 
     def cover_overlay(img, t):
         im = img.convert("RGBA")
@@ -351,7 +366,7 @@ def _pick_steps(data: dict, seed: int) -> tuple[list[Step], list[float]]:
             _paste_layout(im, prompt, min(1.0, (t - t_prompt) / 0.25))
         if t_timer <= t < t_timer + secs:
             left = t_timer + secs - t
-            draw_timer(im, *timer_c, 50, left / secs, math.ceil(left - 1e-6))
+            draw_timer(im, *timer_c, timer_r, left / secs, math.ceil(left - 1e-6))
         return im.convert("RGB")
 
     steps.append(Step(base, [title], overlay=cover_overlay,
@@ -362,16 +377,22 @@ def _pick_steps(data: dict, seed: int) -> tuple[list[Step], list[float]]:
 
     # ---- one reveal per option
     for k, o in enumerate(opts):
+        # label, symbol, option name and trait, centred as one block
         base = make_background(seed, variant=k + 1)
-        draw_wordmark(base, align="center")
-        _label_c(base, "IF YOU PICKED", SAFE.y + 50, 30, MUTED)
-        base = draw_symbol(base, style, k, o, W // 2, SAFE.y + 290, 330)
-        lab = layout_text(o["label"], Box(SAFE.x, SAFE.y + 480, SAFE.w, 110), weight="black",
+        draw_wordmark(base, align="center", cx=W // 2)
+        sym = 330
+        lab = layout_text(o["label"], Box(BODY.x, 0, BODY.w, 110), weight="black",
                           max_size=84, min_size=52, align="center", valign="top", all_accent=True)
-        trait = layout_text(o["trait"], Box(SAFE.x, lab.top + lab.height + 70, SAFE.w,
-                                            SAFE.bottom - 140 - (lab.top + lab.height + 70)),
+        head_h = 22 + 75 + sym + 25             # label caps, gap, symbol, gap
+        trait_y = head_h + lab.height + 70
+        trait = layout_text(o["trait"], Box(BODY.x, 0, BODY.w, BODY.h - trait_y),
                             weight="bold", max_size=66, min_size=42, align="center", valign="top",
                             line_spacing=1.2)
+        top = centred_top(trait_y + trait.height)
+        _label_c(base, "IF YOU PICKED", top + 22, 30, MUTED)
+        base = draw_symbol(base, style, k, o, W // 2, top + 22 + 75 + sym // 2, sym)
+        lab = lab.moved(dy=top + head_h)
+        trait = trait.moved(dy=top + trait_y)
         base = lab.draw(base)
         window = _window(_chars(trait), 1.2, 2.8)
         steps.append(Step(base, [trait], sfx=[(0.0, "whoosh")], type_start=0.3, type_window=window))

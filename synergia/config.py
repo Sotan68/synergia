@@ -24,8 +24,9 @@ def load(path: Path | None = None) -> SimpleNamespace:
     with open(path, "rb") as f:
         cfg = _ns(tomllib.load(f))
     # Resolve relative paths against project root.
-    for key in ("bold", "semibold", "medium", "black"):
-        setattr(cfg.fonts, key, str(ROOT / getattr(cfg.fonts, key)))
+    for key, val in vars(cfg.fonts).items():
+        if isinstance(val, str):
+            setattr(cfg.fonts, key, str(ROOT / val))
     cfg.output.dir = ROOT / cfg.output.dir
     cfg.output.cache_dir = ROOT / cfg.output.cache_dir
     cfg.root = ROOT

@@ -17,15 +17,15 @@ from PIL import Image, ImageDraw
 from synergia import history
 from synergia.brand.animate import FINAL, Step, full_frame, render_video
 from synergia.brand.backgrounds import make_background
-from synergia.brand.canvas import SAFE, Box, draw_safe_zone
-from synergia.brand.elements import draw_ring, draw_timer, draw_wordmark
+from synergia.brand.canvas import CENTRE, SAFE, Box, draw_safe_zone
+from synergia.brand.elements import draw_ring, draw_timer, draw_wordmark, title_card
 from synergia.brand.typography import (ACCENT, ACCENT2, MUTED, TEXT, TextLayout, draw_label, font,
                                      layout_text)
 from synergia.config import CFG
 from synergia.output import run_dir, save_meta
 
 W, H = CFG.brand.width, CFG.brand.height
-GAME = Box(SAFE.x, SAFE.y + 290, SAFE.w, 720)          # play area (y 540..1260)
+GAME = Box(CENTRE.x, SAFE.y + 290, CENTRE.w, 720)      # play area (y 540..1260), centred on screen
 TIMER_C = (W // 2, SAFE.bottom - 112)                  # countdown ring centre
 TIMER_R = 52
 REVEAL_HOLD = 1.8                                      # seconds the answer stays on screen
@@ -306,16 +306,18 @@ class Memory(Game):
         self.sfx = ([(0.0, "pop")] + [(0.2 + i, "tick") for i in range(int(self.show))] +
                     [(self.hide, "whoosh"), (self.q, "pop")] + _timer_sfx(self.q + 0.3, self.secs) +
                     [(self.reveal + 0.3, "ding")])
-        self.grid_all = self._grid(self.words, top=GAME.y + 40)
-        self.grid_rest = self._grid(rest, top=GAME.y + 120)
+        self.grid_all = self._grid(self.words, GAME.y, GAME.bottom)
+        self.grid_rest = self._grid(rest, GAME.y + 100, GAME.bottom - 160)   # room for the answer
         self.question = _prompt_layout("Which one is **missing**?")
 
     @staticmethod
-    def _grid(words: list[str], top: int) -> Image.Image:
+    def _grid(words: list[str], top: int, bottom: int) -> Image.Image:
+        """The words in 2-3 columns, centred vertically between top and bottom."""
         cols = 2 if len(words) <= 8 else 3
         rows = math.ceil(len(words) / cols)
         cw = GAME.w / cols
-        rh = min(130, (GAME.h - (top - GAME.y) - 140) / rows)
+        rh = min(130, (bottom - top) / rows)
+        top += (bottom - top - rows * rh) / 2
         size = 64 if cols == 2 else 52
         f = font("bold", size)
         while max(f.getlength(w) for w in words) > cw - 24:
@@ -688,7 +690,11 @@ class Illusion(_FindOne):
         else:
             cy = GAME.h / 2 - 50
             big_r = 52 + (round(delta * 0.4) if not self.equal else 0)  # the one among big circles
-            for cx, r, ring_r, dist, cnt, name in ((215, big_r, 58, 142, 6, "A"), (630, 52, 17, 84, 8, "B")):
+            # A's ring reaches 142 + 58 = 200 px from its centre, B's 84 + 17 = 101; 114 px apart.
+            # Centre the pair as a whole: total width 2 * 200 + 114 + 2 * 101.
+            ax = (GAME.w - (2 * 200 + 114 + 2 * 101)) / 2 + 200
+            for cx, r, ring_r, dist, cnt, name in ((ax, big_r, 58, 142, 6, "A"),
+                                                   (ax + 200 + 114 + 101, 52, 17, 84, 8, "B")):
                 for k in range(cnt):
                     ang = 2 * math.pi * k / cnt
                     x, y = cx + dist * math.cos(ang), cy + dist * math.sin(ang)
@@ -784,12 +790,13 @@ HASHTAGS = ["#braintest", "#brainteaser", "#iqtest", "#puzzle", "#challenge", "#
 # ---------------------------------------------------------------- steps
 def _round_step(game: Game, idx: int, n: int, bg: Image.Image) -> tuple[Step, float]:
     base = bg.copy()
-    draw_wordmark(base, align="center")
+    draw_wordmark(base, align="center", cx=W // 2)
     label = f"ROUND {idx + 1}/{n}  ·  {game.label}"
     lw = draw_label(Image.new("RGB", (1, 1)), label, 0, 0, size=30, tracking=0.2)
     draw_label(base, label, W // 2 - lw // 2, SAFE.y + 36, size=30, color=ACCENT2, tracking=0.2)
-    instr = layout_text(game.instruction, Box(SAFE.x, SAFE.y + 76, SAFE.w, 170), weight="bold",
-                        max_size=74, min_size=46, align="center", valign="top")
+    # max 2 lines that end well above the play area's question line
+    instr = layout_text(game.instruction, Box(CENTRE.x, SAFE.y + 76, CENTRE.w, 150), weight="bold",
+                        max_size=66, min_size=46, align="center", valign="top")
     n_chars = sum(len(w.text) + 1 for w in instr.words)
     start, window = 0.15, max(0.6, min(1.3, n_chars * 0.035))
     t0 = start + window + 0.35
@@ -808,14 +815,7 @@ def _round_step(game: Game, idx: int, n: int, bg: Image.Image) -> tuple[Step, fl
 
 def _text_step(bg: Image.Image, label: str, big: str, small: str) -> tuple[Step, float]:
     base = bg.copy()
-    draw_wordmark(base, align="center")
-    lw = draw_label(Image.new("RGB", (1, 1)), label, 0, 0, size=34, tracking=0.24)
-    big_l = layout_text(big, Box(SAFE.x, SAFE.y + 300, SAFE.w, 420), weight="black", max_size=116,
-                        min_size=64, align="center", valign="bottom", line_spacing=1.1)
-    small_l = layout_text(small, Box(SAFE.x, big_l.top + big_l.height + 60, SAFE.w, 200),
-                          weight="medium", max_size=56, min_size=38, align="center", valign="top",
-                          color=MUTED)
-    draw_label(base, label, W // 2 - lw // 2, big_l.top - 70, size=34, color=ACCENT2, tracking=0.24)
+    big_l, small_l = title_card(base, label, big, small, 116, 64, 56, 38, 34, 0.24)
     chars = sum(len(w.text) + 1 for lay in (big_l, small_l) for w in lay.words)
     window = max(0.9, min(2.0, chars * 0.035))
     step = Step(base, [big_l, small_l], type_start=0.2, type_window=window)

@@ -6,19 +6,16 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from synergia.brand import paper
 from synergia.brand.animate import Step, full_frame, render_video, scaled_duration
-from synergia.brand.backgrounds import make_background
 from synergia.brand.canvas import Box, draw_safe_zone, safe_for
-from synergia.brand.elements import draw_wordmark, footer_baseline
-from synergia.brand.typography import (ACCENT, ACCENT2, MUTED, TEXT, draw_gradient_text, draw_label,
-                                     font, layout_text, strip_markup)
+from synergia.brand.typography import font, layout_text, strip_markup
 from synergia import history
 from synergia.config import CFG
 from synergia.llm.bridge import check_text, normalize_common, words
 from synergia.llm.prompts import listicle_prompt
 from synergia.output import run_dir, save_meta
 
-BODY = tuple(int(c * 0.86) for c in TEXT)
 LIMITS = {"cover_title": 12, "cover_subtitle": 6, "title": 8, "body": 22}
 
 
@@ -61,70 +58,89 @@ def review_fields(data: dict) -> list[tuple[str, str]]:
 
 
 # ---------------------------------------------------------------- slides
+# The "paper" look (synergia.brand.paper): serif headlines with blue italic highlights, a large
+# purple serif numeral per point, Inter Display body text, page count in the footer.
+N_SLIDES = 6
+
+
+def _centred(top_area: int, bottom_area: int, height: int, lift: int = 40) -> int:
+    return top_area + max(0, (bottom_area - top_area - height) // 2 - lift)
+
+
 def _cover(data: dict, bg: Image.Image, swipe: bool = True) -> Step:
-    """Cover: title (+ subtitle) revealed; rule, wordmark and swipe cue are static."""
-    base = bg.copy()
+    """Cover: big serif title (+ subtitle) typed out; footer and swipe cue are static."""
+    base = bg
     safe = safe_for(base.height)
-    draw_wordmark(base)
-    title_box = Box(safe.x, safe.y + int(safe.h * 0.14), safe.w, int(safe.h * 0.52))
-    title = layout_text(data["cover_title"], title_box, weight="black", max_size=118, min_size=56,
-                        valign="bottom", line_spacing=1.1)
+    tall = base.height == CFG.brand.height
+    title = layout_text(data["cover_title"], Box(safe.x, 0, safe.w, int(safe.h * 0.58)),
+                        weight=paper.SERIF, max_size=160 if tall else 128, min_size=70,
+                        valign="top", line_spacing=1.0, color=paper.INK,
+                        accent_color=paper.ACCENT, accent_weight=paper.SERIF_I)
     layouts = [title]
-    # Purple rule under title.
-    y = title.top + title.height + 50
-    ImageDraw.Draw(base).rectangle([safe.x, y, safe.x + 110, y + 7], fill=ACCENT2)
+    sub = None
     if data.get("cover_subtitle"):
-        sub_box = Box(safe.x, y + 50, safe.w, int(safe.h * 0.16))
-        layouts.append(layout_text(data["cover_subtitle"], sub_box, weight="medium", max_size=54,
-                                   min_size=36, valign="top", color=MUTED))
+        sub = layout_text(data["cover_subtitle"], Box(safe.x, 0, safe.w, int(safe.h * 0.16)),
+                          weight=paper.TEXT_W, max_size=46, min_size=34, valign="top",
+                          color=paper.SOFT, accent_color=paper.ACCENT,
+                          accent_weight=paper.SERIF_I, accent_scale=paper.SERIF_IN_SANS)
+    gap = 56
+    total = title.height + (gap + sub.height if sub else 0)
+    title = title.moved(dy=_centred(safe.y, safe.bottom - 110, total))
+    layouts[0] = title
+    if sub:
+        layouts.append(sub.moved(dy=title.top + title.height + gap))
+    paper.footer(base)
     if swipe:  # carousel only; a video plays on by itself
-        label = "SWIPE  →"
-        f = font("semibold", 30)
-        width = sum(f.getlength(c) for c in label) + 30 * 0.25 * (len(label) - 1)
-        draw_label(base, label, int(safe.right - width), footer_baseline(base), size=30,
-                   color=MUTED, tracking=0.25)
+        paper.swipe_pill(base)
     return Step(base, layouts)
 
 
-def _point(i: int, p: dict, bg: Image.Image) -> Step:
-    """Point slide: big gradient number is static; title then body are revealed."""
-    base = bg.copy()
+GAP_NUM, GAP_BODY = 64, 40
+
+
+def _point_parts(p: dict, height: int):
+    """(numeral size, numeral cap height, title, body, block height) with the text at y = 0."""
+    safe = safe_for(height)
+    tall = height == CFG.brand.height
+    num_size = 330 if tall else 240
+    num_h = int(num_size * 0.72)            # cap height of the numeral
+    title = layout_text(p["title"], Box(safe.x, 0, safe.w, int(safe.h * 0.30)), weight=paper.SERIF,
+                        max_size=100 if tall else 84, min_size=56, valign="top",
+                        line_spacing=1.04, color=paper.INK, accent_color=paper.ACCENT,
+                        accent_weight=paper.SERIF_I)
+    body = layout_text(p["body"], Box(safe.x, 0, safe.w, int(safe.h * 0.28)), weight=paper.TEXT_W,
+                       max_size=50, min_size=34, valign="top", line_spacing=1.36,
+                       color=paper.SOFT, accent_color=paper.ACCENT,
+                       accent_weight=paper.SERIF_I, accent_scale=paper.SERIF_IN_SANS)
+    return num_size, num_h, title, body, num_h + GAP_NUM + title.height + GAP_BODY + body.height
+
+
+def _point(i: int, p: dict, bg: Image.Image, top: int) -> Step:
+    """Point slide: big purple serif numeral is static; title then body are typed out.
+
+    `top` is shared by all point slides, so the numeral sits at the same height on each."""
+    base = bg
     safe = safe_for(base.height)
-    draw_wordmark(base)
-    content = Box(safe.x, safe.y + 120, safe.w, safe.h - 220)
-
-    num_size = 210 if base.height == CFG.brand.height else 150
-    gap1, gap2 = 50, 44
-
-    def stack(top: int):
-        nf = font("black", num_size)
-        num_h = int(num_size * 0.75)
-        tbox = Box(content.x, top + num_h + gap1, content.w, int(content.h * 0.36))
-        title = layout_text(p["title"], tbox, weight="bold", max_size=92, min_size=50, valign="top",
-                            line_spacing=1.12)
-        bbox = Box(content.x, title.top + title.height + gap2, content.w,
-                   int(content.h * 0.30))
-        body = layout_text(p["body"], bbox, weight="medium", max_size=52, min_size=34,
-                           valign="top", color=BODY, line_spacing=1.32)
-        total = (body.top + body.height) - top
-        return nf, num_h, title, body, total
-
-    _, _, _, _, total = stack(content.y)
-    top = content.y + max(0, (content.h - total) // 2 - 40)
-    nf, num_h, title, body, _ = stack(top)
-
-    draw_gradient_text(base, (content.x - 6, top + num_h), f"{i:02d}", nf, ACCENT, ACCENT2)
+    num_size, num_h, title, body, _ = _point_parts(p, base.height)
+    ImageDraw.Draw(base).text((safe.x - 6, top + num_h), f"{i:02d}",
+                              font=font(paper.SERIF_I, num_size), fill=paper.ACCENT2, anchor="ls")
+    title = title.moved(dy=top + num_h + GAP_NUM)
+    body = body.moved(dy=title.top + title.height + GAP_BODY)
+    paper.footer(base, i + 1, N_SLIDES)
     return Step(base, [title, body])
 
 
 def build_steps(data: dict, seed: int, height: int | None = None,
                 swipe: bool = True) -> list[Step]:
     h = height or CFG.brand.height
+    safe = safe_for(h)
+    tallest = max(_point_parts(p, h)[-1] for p in data["points"])
+    top = _centred(safe.y, safe.bottom - 110, tallest, lift=20)
     steps = []
-    for idx in range(6):
-        bg = make_background(seed, CFG.brand.width, h, variant=idx)
+    for idx in range(N_SLIDES):
+        bg = paper.background(seed, CFG.brand.width, h, variant=idx)
         steps.append(_cover(data, bg, swipe) if idx == 0
-                     else _point(idx, data["points"][idx - 1], bg))
+                     else _point(idx, data["points"][idx - 1], bg, top))
     return steps
 
 

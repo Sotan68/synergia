@@ -19,7 +19,27 @@ bold = "assets/fonts/Inter-Bold.ttf"
 semibold = "assets/fonts/Inter-SemiBold.ttf"
 medium = "assets/fonts/Inter-Medium.ttf"
 black = "assets/fonts/Inter-Black.ttf"
+# Engine A / B "paper" slides: Instrument Serif headlines, Inter Display text.
+serif = "assets/fonts/InstrumentSerif-Regular.ttf"
+serif_italic = "assets/fonts/InstrumentSerif-Italic.ttf"
+display_medium = "assets/fonts/InterDisplay-Medium.ttf"
+display_semibold = "assets/fonts/InterDisplay-SemiBold.ttf"
+display_bold = "assets/fonts/InterDisplay-Bold.ttf"
+# Engine A's paragraph slides (2 and 3): one font for the header and the text.
+# A variable font takes its axes after "|", e.g. "assets/fonts/X.ttf|Weight=500".
+paragraph = "assets/fonts/Newsreader.ttf|Weight=480,Optical Size=36"
 line_spacing = 1.2
+
+# Engine A / B look: textured off-white paper, navy ink, blue + purple accents.
+[paper]
+background = "#F6F5FC"    # paper colour (cool white)
+ink = "#14143C"           # main text (deep navy)
+soft = "#585C84"          # body text under titles, captions, page numbers
+accent = "#2F4BFF"        # highlighted words (blue serif italic)
+accent2 = "#7457F5"       # numbers and small labels (purple)
+grain = 0.026             # paper grain (0 = off)
+mottle = 0.016            # soft, cloudy unevenness of the paper (0 = off)
+tint = 0.035              # faint blue / lavender wash across the sheet (0 = off)
 
 # Safe zone for TikTok / Reels / Shorts UI (pixels on the 1080x1920 canvas).
 [safe_zone]

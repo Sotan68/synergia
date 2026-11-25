@@ -19,7 +19,18 @@ BG_DARK = hex_to_rgb(CFG.brand.background)
 
 @lru_cache(maxsize=256)
 def font(weight: str, size: int) -> ImageFont.FreeTypeFont:
-    return ImageFont.truetype(getattr(CFG.fonts, weight), size)
+    """Font by role name from [fonts] in config.toml.
+
+    A variable font takes its axis settings after a "|", e.g.
+    "assets/fonts/Newsreader.ttf|Weight=500,Optical Size=36"; unnamed axes keep their default."""
+    path, _, axes = getattr(CFG.fonts, weight).partition("|")
+    f = ImageFont.truetype(path, size)
+    if axes:
+        want = {k.strip().lower(): float(v) for k, v in
+                (a.split("=") for a in axes.split(",") if a.strip())}
+        f.set_variation_by_axes([want.get(a["name"].decode().lower(), a["default"])
+                                 for a in f.get_variation_axes()])
+    return f
 
 
 Run = tuple[str, bool]  # (text, is_accent)
@@ -78,6 +89,10 @@ class TextLayout:
     top: int        # y of block top
     color: tuple[int, int, int] = TEXT
     accent_color: tuple[int, int, int] = ACCENT
+    # Accent runs can use their own font (e.g. a serif italic inside sans text), scaled so the
+    # two match optically.
+    accent_weight: str | None = None
+    accent_scale: float = 1.0
     _sprites: dict = field(default_factory=dict, repr=False)
     _edges: dict = field(default_factory=dict, repr=False)
 
@@ -85,18 +100,49 @@ class TextLayout:
     def font(self) -> ImageFont.FreeTypeFont:
         return font(self.weight, self.size)
 
+    def run_font(self, accent: bool) -> ImageFont.FreeTypeFont:
+        return _run_font(self.weight, self.size, accent, self.accent_weight, self.accent_scale)
+
+    def _metrics(self) -> tuple[int, int]:
+        """(ascent, descent) covering both the normal and the accent font."""
+        a, d = self.font.getmetrics()
+        if self.accent_weight:
+            a2, d2 = self.run_font(True).getmetrics()
+            a, d = max(a, a2), max(d, d2)
+        return a, d
+
+    def _word_len(self, w: "PlacedWord") -> float:
+        return sum(self.run_font(acc).getlength(t) for t, acc in w.runs)
+
+    @property
+    def width(self) -> int:
+        """Width of the widest line (left edge of the block to the end of its longest line)."""
+        if not self.words:
+            return 0
+        left = min(w.x for w in self.words)
+        return int(max(w.x + self._word_len(w) for w in self.words) - left)
+
+    def moved(self, dx: int = 0, dy: int = 0) -> "TextLayout":
+        """The same layout shifted by (dx, dy): measure a block first, then put it in place."""
+        b = self.box
+        return TextLayout([PlacedWord(w.runs, w.x + dx, w.y + dy, w.line) for w in self.words],
+                          self.size, self.weight, Box(b.x + dx, b.y + dy, b.w, b.h), self.height,
+                          self.top + dy, self.color, self.accent_color, self.accent_weight,
+                          self.accent_scale)
+
     def sprite(self, i: int) -> tuple[Image.Image, int, int]:
         """RGBA sprite of word i and its top-left paste position."""
         if i not in self._sprites:
             w = self.words[i]
-            f = self.font
-            asc, desc = f.getmetrics()
-            width = int(f.getlength(w.text)) + 8
+            asc, desc = self._metrics()
+            # extra room on the right: italic overhang
+            width = int(self._word_len(w)) + 8 + (self.size // 6 if self.accent_weight else 0)
             im = Image.new("RGBA", (width, asc + desc + 8), (0, 0, 0, 0))
             d = ImageDraw.Draw(im)
             x = 4.0
             for text, acc in w.runs:
                 col = self.accent_color if acc else self.color
+                f = self.run_font(acc)
                 d.text((x, 4 + asc), text, font=f, fill=col + (255,), anchor="ls")
                 x += f.getlength(text)
             self._sprites[i] = (im, w.x - 4, w.y - asc - 4)
@@ -106,9 +152,9 @@ class TextLayout:
         """x boundaries (sprite coords) of each character of word i: len(text) + 1 values."""
         if i not in self._edges:
             spr, _, _ = self.sprite(i)
-            f = self.font
             edges, x0 = [0], 4.0
-            for text, _ in self.words[i].runs:
+            for text, acc in self.words[i].runs:
+                f = self.run_font(acc)
                 for k in range(1, len(text) + 1):
                     edges.append(max(edges[-1], int(round(x0 + f.getlength(text[:k])))))
                 x0 += f.getlength(text)
@@ -166,11 +212,23 @@ class TextLayout:
         return base.convert("RGB")
 
 
+@lru_cache(maxsize=512)
+def _run_font(weight: str, size: int, accent: bool, accent_weight: str | None,
+              accent_scale: float) -> ImageFont.FreeTypeFont:
+    if accent and accent_weight:
+        return font(accent_weight, round(size * accent_scale))
+    return font(weight, size)
+
+
 def layout_text(text: str, box: Box, weight: str = "bold", max_size: int = 96,
                 min_size: int = 34, align: str = "left", valign: str = "center",
                 line_spacing: float | None = None, color=TEXT, accent_color=ACCENT,
-                all_accent: bool = False) -> TextLayout:
-    """Find the largest size in [min_size, max_size] at which the text fits the box."""
+                all_accent: bool = False, accent_weight: str | None = None,
+                accent_scale: float = 1.0) -> TextLayout:
+    """Find the largest size in [min_size, max_size] at which the text fits the box.
+
+    accent_weight / accent_scale: font (and size factor) for **accent** words, e.g. a serif
+    italic inside sans text."""
     tokens = parse_markup(text)
     if all_accent:
         tokens = [[(t, True) for t, _ in runs] for runs in tokens]
@@ -182,7 +240,8 @@ def layout_text(text: str, box: Box, weight: str = "bold", max_size: int = 96,
         lines: list[list[tuple[list[Run], float]]] = [[]]
         cur = 0.0
         for runs in tokens:
-            wl = f.getlength("".join(t for t, _ in runs))
+            wl = sum(_run_font(weight, size, acc, accent_weight, accent_scale).getlength(t)
+                     for t, acc in runs)
             add = wl if not lines[-1] else space + wl
             if lines[-1] and cur + add > box.w:
                 lines.append([])
@@ -218,7 +277,8 @@ def layout_text(text: str, box: Box, weight: str = "bold", max_size: int = 96,
         for runs, wl in ln:
             placed.append(PlacedWord(runs, int(x), int(baseline), li))
             x += wl + space
-    return TextLayout(placed, size, weight, box, total_h, top, color, accent_color)
+    return TextLayout(placed, size, weight, box, total_h, top, color, accent_color,
+                      accent_weight, accent_scale)
 
 
 def draw_label(img: Image.Image, text: str, x: int, y: int, size: int = 34,

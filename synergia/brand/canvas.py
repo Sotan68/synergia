@@ -41,6 +41,18 @@ class Box:
 W, H = CFG.brand.width, CFG.brand.height
 SZ = CFG.safe_zone
 SAFE = Box(SZ.left, SZ.top, SZ.right - SZ.left, SZ.bottom - SZ.top)
+# Centred layouts: the safe zone is lopsided (wider right margin for the app's buttons), so its own
+# centre sits left of the screen's. This box keeps the larger margin on both sides, so anything
+# centred in it is centred on screen and still inside the safe zone.
+_M = max(SZ.left, W - SZ.right)
+CENTRE = Box(_M, SZ.top, W - 2 * _M, SZ.bottom - SZ.top)
+# Where content goes on D / E frames: the safe zone minus the footer row (wordmark) at its bottom.
+BODY = Box(CENTRE.x, SZ.top, CENTRE.w, SZ.bottom - 80 - SZ.top)
+
+
+def centred_top(height: int, area: Box = BODY) -> int:
+    """Top y that centres a block of `height` px vertically in `area` (pinned to its top if too tall)."""
+    return area.y + max(0, (area.h - height) // 2)
 
 
 def safe_for(height: int) -> Box:

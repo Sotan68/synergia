@@ -4,13 +4,12 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
+from synergia.brand import paper
 from synergia.brand.animate import Step, full_frame, render_video, scaled_duration
-from synergia.brand.backgrounds import make_background
-from synergia.brand.canvas import SAFE, Box, draw_safe_zone
-from synergia.brand.elements import draw_wordmark
-from synergia.brand.typography import ACCENT2, MUTED, draw_label, layout_text, strip_markup
+from synergia.brand.canvas import CENTRE, Box, draw_safe_zone, safe_for
+from synergia.brand.typography import font, layout_text, strip_markup
 from synergia import history
 from synergia.config import CFG
 from synergia.llm.bridge import check_text, normalize_common, words
@@ -19,7 +18,6 @@ from synergia.output import run_dir, save_meta
 
 LIMITS = {"hook_line": 10, "gotcha": 40, "mechanism": 35, "shift": 20}
 REF_WORDS = [12, 34, 30, 16]          # word counts the base durations are tuned for
-STEP_LABELS = ["", "THE MIRROR", "THE MECHANISM", "THE SHIFT"]
 STEP_FILES = ["01_hook", "02_mirror", "03_mechanism", "04_shift"]
 
 
@@ -48,58 +46,70 @@ def review_fields(_: dict) -> list[tuple[str, str]]:
 
 
 # ---------------------------------------------------------------- frame composition
-def _content_box() -> Box:
-    return Box(SAFE.x, SAFE.y + 130, SAFE.w, SAFE.h - 230)
+# The "paper" look (synergia.brand.paper): serif headlines, Inter Display text, blue serif italic
+# for **highlighted** words, a section header with a hairline rule, page count in the footer.
+STEP_NAMES = ["", "The mirror", "The mechanism", "The shift"]
 
 
-def _step_header(img: Image.Image, idx: int, box: Box) -> None:
-    draw_label(img, f"{idx + 1:02d}", box.x, box.y, size=34, color=MUTED, tracking=0.1)
-    draw_label(img, STEP_LABELS[idx], box.x + 78, box.y, size=34, color=ACCENT2, tracking=0.22)
+def _body_box(img: Image.Image) -> Box:
+    """Area for the text block under the section header and above the footer."""
+    safe = safe_for(img.height)
+    top = safe.y + 150
+    return Box(safe.x, top, safe.w, safe.bottom - 110 - top)
 
 
-def build_steps(data: dict, bg: Image.Image) -> list[Step]:
+def _centred(top_area: int, bottom_area: int, height: int, lift: int = 30) -> int:
+    """Top y centring a block of `height` between two y's, nudged up a little (optical centre)."""
+    return top_area + max(0, (bottom_area - top_area - height) // 2 - lift)
+
+
+def build_steps(data: dict, seed: int) -> list[Step]:
     steps: list[Step] = []
-    box = _content_box()
 
-    # 1 — Hook: concept name (blue) + "explained in 10 seconds" + hook line.
-    base = bg.copy()
-    draw_wordmark(base)
+    # 1 - Hook: concept in large serif, "Explained in 10 seconds", then the hook line.
+    base = paper.background(seed, variant=0)
+    safe = safe_for(base.height)
+    concept = layout_text(data["concept"], Box(safe.x, 0, safe.w, 470), weight=paper.SERIF,
+                          max_size=172, min_size=84, valign="top", line_spacing=0.98,
+                          color=paper.INK, accent_color=paper.ACCENT,
+                          accent_weight=paper.SERIF_I)
+    hook = layout_text(data["hook_line"], Box(safe.x, 0, safe.w, 300), weight=paper.STRONG_W,
+                       max_size=70, min_size=48, valign="top", line_spacing=1.18,
+                       color=paper.INK, accent_color=paper.ACCENT, accent_weight=paper.SERIF_I,
+                       accent_scale=paper.SERIF_IN_SANS)
+    gap_label, gap_hook = 76, 72
+    total = concept.height + gap_label + gap_hook + hook.height
+    top = _centred(safe.y, safe.bottom - 110, total)
+    concept = concept.moved(dy=top)
+    label_y = concept.top + concept.height + gap_label - 20
+    hook = hook.moved(dy=concept.top + concept.height + gap_label + gap_hook - 10)
+    ImageDraw.Draw(base).text((safe.x, label_y), "Explained in 10 seconds",
+                              font=font(paper.TEXT_W, 36), fill=paper.ACCENT2, anchor="ls")
+    paper.footer(base, 1, 4)
+    steps.append(Step(base, [concept, hook]))
 
-    def hook_stack(top: int):
-        c = layout_text(data["concept"], Box(box.x, top, box.w, int(box.h * 0.40)),
-                        weight="black", max_size=124, min_size=64, valign="top",
-                        line_spacing=1.08, all_accent=True)
-        label_y = c.top + c.height + 70
-        hl = layout_text(data["hook_line"], Box(box.x, label_y + 60, box.w, int(box.h * 0.30)),
-                         weight="bold", max_size=78, min_size=48, valign="top", line_spacing=1.16)
-        return c, label_y, hl, (hl.top + hl.height) - top
-
-    *_, total = hook_stack(box.y)
-    top = box.y + max(0, (box.h - total) // 2 - 30)
-    concept, label_y, hook_line, _ = hook_stack(top)
-    draw_label(base, "EXPLAINED IN 10 SECONDS", box.x, label_y, size=32, color=MUTED,
-               tracking=0.22)
-    steps.append(Step(base, [concept, hook_line]))
-
-    # 2 & 3 — Mirror and Mechanism.
+    # 2 & 3 - Mirror and Mechanism: section header, then the paragraph. One font for the whole
+    # slide ([fonts] paragraph); highlighted words only change colour.
     for idx, key in ((1, "gotcha"), (2, "mechanism")):
-        base = bg.copy()
-        draw_wordmark(base)
-        text_box = Box(box.x, box.y + 110, box.w, box.h - 140)
-        lay = layout_text(data[key], text_box, weight="bold", max_size=84, min_size=46,
-                          valign="center", line_spacing=1.2)
-        _step_header(base, idx, Box(box.x, lay.top - 70, box.w, 0))
+        base = paper.background(seed, variant=idx)
+        paper.section_header(base, idx + 1, STEP_NAMES[idx], face=paper.PARA_W, size=36)
+        box = _body_box(base)
+        lay = layout_text(data[key], Box(box.x, 0, box.w, box.h - 60), weight=paper.PARA_W,
+                          max_size=84, min_size=44, valign="top", line_spacing=1.24,
+                          color=paper.INK, accent_color=paper.ACCENT)
+        lay = lay.moved(dy=_centred(box.y, box.bottom, lay.height))
+        paper.footer(base, idx + 1, 4)
         steps.append(Step(base, [lay]))
 
-    # 4 — Shift: biggest, centered.
-    base = bg.copy()
-    draw_wordmark(base, align="center")
-    lay = layout_text(data["shift"], Box(box.x, box.y + 110, box.w, box.h - 140), weight="black",
-                      max_size=100, min_size=52, align="center", valign="center",
-                      line_spacing=1.14)
-    w = draw_label(Image.new("RGB", (1, 1)), "THE SHIFT", 0, 0, size=34, tracking=0.22)
-    draw_label(base, "THE SHIFT", box.cx - w // 2, lay.top - 80, size=34, color=ACCENT2,
-               tracking=0.22)
+    # 4 - Shift: a centred serif statement on its own.
+    base = paper.background(seed, variant=3)
+    safe = safe_for(base.height)
+    col = Box(CENTRE.x, 0, CENTRE.w, 760)
+    lay = layout_text(data["shift"], col, weight=paper.SERIF, max_size=112, min_size=60,
+                      align="center", valign="top", line_spacing=1.04, color=paper.INK,
+                      accent_color=paper.ACCENT, accent_weight=paper.SERIF_I)
+    lay = lay.moved(dy=_centred(safe.y, safe.bottom - 110, lay.height))
+    paper.footer(base, align="center")
     steps.append(Step(base, [lay]))
     return steps
 
@@ -118,8 +128,7 @@ def _durations(data: dict) -> list[float]:
 def produce(data: dict, debug: bool = False, video: bool = True) -> Path:
     out = run_dir("A", strip_markup(data["concept"]))
     seed = random.randint(0, 10_000_000)
-    bg = make_background(seed)
-    steps = build_steps(data, bg)
+    steps = build_steps(data, seed)
     for step, name in zip(steps, STEP_FILES):
         img = full_frame(step)
         if debug:
