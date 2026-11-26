@@ -9,9 +9,7 @@ from nicegui import run, ui
 from synergia import autopilot as ap
 from synergia.config import CFG
 from synergia.gui.components import S, busy, is_busy, media_url
-
-ENGINE_NAMES = {"A": "Psychology Explainer", "B": "Fact Slideshow", "C": "Podcast clips",
-                "D": "Brain Test", "E": "Which One Are You"}
+from synergia.output import ENGINE_NAMES
 STATUS_COLORS = {ap.PENDING: "grey", ap.RENDERING: "warning", ap.REVIEW: "primary",
                  ap.APPROVED: "positive", ap.DROPPED: "grey-7", ap.FAILED: "negative",
                  ap.SCHEDULED: "secondary"}
@@ -167,7 +165,7 @@ def start_panel(refresh) -> None:
                            f"at {_slots_per_day()} a day")
 
         with ui.row().classes("gap-4 items-end"):
-            for k in ap.ENGINES:
+            for k in ap.ENGINES:     # only the engines enabled in the profile
                 inputs[k] = ui.number(f"{k} · {ENGINE_NAMES[k]}", value=mix[k], min=0, max=30, step=1,
                                       format="%d", on_change=update_total) \
                     .props("outlined dense").classes("w-44")

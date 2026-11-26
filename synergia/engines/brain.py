@@ -507,7 +507,7 @@ class ShellGame(Game):
         d = _Pen(im)
         for c in range(3):   # soft floor shadows
             x, _ = self._cup_xy(c, t)
-            d.ellipse([x - 95, self.floor - 12, x + 95, self.floor + 14], fill=quiz.TEXT + (int(34 * a),))
+            d.ellipse([x - 95, self.floor - 12, x + 95, self.floor + 14], fill=((0, 0, 0) if quiz.SURFACE_DARK else quiz.TEXT) + (int(34 * a),))
         d.flush()
         br = 40
         _ball = _ball_sprite(br)
@@ -779,7 +779,9 @@ class Scramble(_FindOne):
             _center_text(im, ch, x + tile / 2, y + tile / 2, HEAVY, int(tile * 0.58), ink_col, a)
 
     def draw_puzzle(self, im, a):
-        self._tiles(im, self.letters, GAME.cy - 170, (234, 230, 255), a)       # lavender tint
+        tint = (234, 230, 255) if not quiz.SURFACE_DARK else \
+            tuple(int(s * 0.75 + c * 0.25) for s, c in zip(quiz.BG, ACCENT2))   # on dark cards
+        self._tiles(im, self.letters, GAME.cy - 170, tint, a)       # lavender tint
 
     def draw_answer(self, im, t):
         b = _fade(t, self.reveal, 0.3)
@@ -815,8 +817,6 @@ CAPTIONS = [
     "Send this to the smartest person you know", "Got less than {n}? Try again before you scroll",
     "Drop your score, let's see who's sharpest",
 ]
-HASHTAGS = ["#braintest", "#brainteaser", "#iqtest", "#puzzle", "#challenge", "#psychology", "#focus",
-            "#memorytest", "#mindgames"]
 
 
 # ---------------------------------------------------------------- steps
@@ -889,7 +889,8 @@ def build(seed: int | None = None) -> tuple[list[Step], list[float], dict]:
         for k, items in g.used.items():
             used.setdefault(k, []).extend(items)
     title = rng.choice(TITLES).format(**fmt)
-    tags = ["#braintest"] + rng.sample(HASHTAGS[1:], 5)
+    pool = list(CFG.hashtags.D) or ["#braintest"]      # first one always, then 5 of the rest
+    tags = pool[:1] + rng.sample(pool[1:], min(5, len(pool) - 1))
     data = {"title": title, "hook": hook.format(**fmt).replace("**", ""),
             "games": [GAME_TITLES[k] for k in keys], "seed": seed,
             "caption": rng.choice(CAPTIONS).format(**fmt), "hashtags": tags, "_used": used}

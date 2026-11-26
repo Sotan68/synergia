@@ -5,11 +5,33 @@ from functools import lru_cache
 
 from PIL import Image, ImageDraw
 
-from synergia.config import hex_to_rgb
+from synergia.config import CFG, hex_to_rgb
 
-# Colours sampled from "logo ideas/05 · Overlap, mark only".
-MARK_BLUE = hex_to_rgb("#5B9CFF")
-MARK_PURPLE = hex_to_rgb("#A78BFA")
+# The drawn mark's two colours come from the theme ([brand] mark_colors); the Synergia theme uses
+# the colours sampled from "logo ideas/05 · Overlap, mark only" (#5B9CFF, #A78BFA).
+MARK_BLUE, MARK_PURPLE = (hex_to_rgb(c) for c in CFG.brand.mark_colors[:2])
+
+
+def footer_name() -> str:
+    """The brand name as written in slide footers: an all-caps name ("SYNERGIA") in title case,
+    anything else exactly as the user typed it ("FitDad Daily")."""
+    name = str(CFG.brand.name).strip()
+    return name.title() if name.isupper() else name
+
+
+@lru_cache(maxsize=8)
+def logo(height: int) -> Image.Image:
+    """The brand logo for footers: the user's PNG ([brand] logo) scaled to `height`, or the drawn
+    Overlap mark in the theme's colours."""
+    path = CFG.brand.logo
+    if path and path.is_file():
+        im = Image.open(path).convert("RGBA")
+        bbox = im.getbbox()               # trim transparent margins so sizing is predictable
+        if bbox:
+            im = im.crop(bbox)
+        w = max(1, round(im.width * height / im.height))
+        return im.resize((w, height), Image.LANCZOS)
+    return logo_mark(height)
 
 
 @lru_cache(maxsize=8)

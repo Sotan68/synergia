@@ -26,8 +26,9 @@ from typing import Callable
 from synergia import demo, history
 from synergia.brand.typography import strip_markup
 from synergia.config import CFG
+from synergia.output import ENABLED, ENGINE_NAMES
 
-ENGINES = ("A", "B", "C", "D", "E")
+ENGINES = tuple(ENABLED)      # the engines enabled in the profile
 NEEDS_CLAUDE = ("A", "B", "E")
 DEFAULT_MIX = {"A": 2, "B": 2, "C": 5, "D": 3, "E": 2}
 SPARE_CLIPS = 2
@@ -443,8 +444,7 @@ def render_item(batch_id: str, it: dict, state: dict, is_demo: bool, debug: bool
 
 
 def _label(it: dict) -> str:
-    name = {"A": "Psychology Explainer", "B": "Fact Slideshow", "C": "Podcast clip", "D": "Brain Test",
-            "E": "Which One Are You"}[it["engine"]]
+    name = ENGINE_NAMES[it["engine"]]
     return f"{name}: {it['topic']}" if it.get("topic") else name
 
 

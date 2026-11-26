@@ -1,5 +1,7 @@
 # SYNERGIA — Zero-Cost Short-Form Content Engine
 
+Synergia makes short-form videos for **your** niche: you pick a brand name, logo, topic and look on first launch, and every script, slide, hashtag and caption follows it.
+
 Everything runs locally. There are no paid APIs. Script writing uses a clipboard round trip with your Claude Pro chat.
 
 ## Setup (once)
@@ -21,6 +23,31 @@ On an NVIDIA GPU, Whisper runs on CUDA automatically and falls back to the CPU i
 .venv\Scripts\python main.py --debug    # safe-zone overlay, tracking debug video, tracebacks
 ```
 
+### First launch: set up your brand
+The first time you run Synergia it asks about your brand before anything else (`--gui` opens the setup page in the browser; the console asks the same questions):
+1. **Brand**: name and an optional logo (a PNG with a transparent background works best). Both appear in every slide footer.
+2. **Your niche**: describe what you post about in a sentence or two, and who it's for. Claude drafts the rest: the writing voice, the subjects you cover, example topics, the wording of Engine A's three slides (e.g. "The mistake / Why it happens / The fix" for fitness), hashtags for each format, and keywords for the podcast clip finder.
+3. **Review**: every drafted field is editable. Or skip Claude and fill them in yourself.
+4. **Theme**: pick a look. Each card shows a preview of your own slides. Every theme has its own fonts, colours and layout:
+
+   | Theme | Background | Text | Highlighted words | Fonts |
+   |---|---|---|---|---|
+   | **Synergia** | textured paper | left | blue serif italic | Instrument Serif, Inter Display, Newsreader |
+   | **Notebook** | graph paper | left | yellow highlighter | Space Grotesk |
+   | **Cobalt** | blue gradient | centred | lavender highlighter | Bricolage Grotesque |
+   | **Midnight** | dark navy | left | gold | Fraunces, DM Sans |
+   | **Sunset** | cream-to-peach | centred | coral italic | DM Serif Display, DM Sans |
+   | **Minimal** | pure white | left | red underline | Inter |
+5. **Engines**: tick the formats you want; the others disappear from the menus and from Autopilot.
+
+### Profiles
+Each setup is a **profile**: one brand, niche and look, with its own videos (Library), topic history, upload queue, Autopilot batches and YouTube channel. They live in `profiles/<name>/` (not tracked by git, so updates never overwrite them); podcast downloads and transcripts are shared.
+- **Switch** with the profile menu (top right) in the browser interface, or **P** in the console menu. Synergia restarts on the new profile; the open page reloads by itself.
+- **New profile** in the same menu runs the setup again. **Settings** edits the active profile.
+- `main.py --profile <name>` runs one profile without changing the active one. The daily upload task uploads for every profile, each to its own channel.
+- Installs from before profiles existed were moved into `profiles/synergia/` automatically, with the original SYNERGIA psychology setup, so nothing changes for them.
+- Brands that share one Google Cloud OAuth client also share YouTube's daily upload quota; put a profile's own `client_secret.json` in `profiles/<name>/secrets/` to give it its own.
+
 ### Browser interface
 ```powershell
 .venv\Scripts\python main.py --gui            # opens http://localhost:8765
@@ -28,7 +55,7 @@ On an NVIDIA GPU, Whisper runs on CUDA automatically and falls back to the CPU i
 ```
 The interface runs the same engines as the console, with clicks instead of typing:
 - **Create:** one tab per engine. Claude writes the script automatically (see below); if that falls back to copy and paste, press **Read clipboard** after copying Claude's reply, or paste it into the box. Each script field is a text box you edit directly. When the render finishes, the slides, the video and `caption.txt` (which you can edit) appear on the page.
-- **Library:** every past run with a thumbnail and its YouTube status. Click one to watch it, edit its caption, open the folder or upload it.
+- **Library:** every past run of the active profile, with a thumbnail and its YouTube status. Click one to watch it, edit its caption, open the folder or upload it.
 - **Upload:** tick one or more videos, check the preview, then choose **Now**, **Next free slot**, or a date and time.
 
 Keep the console window open while you use it: progress details still print there, and Ctrl+C there stops the interface. `python main.py` without `--gui` still runs the console version.
@@ -50,13 +77,14 @@ Either way, you then review the script, edit any field (mark highlighted words w
 ## Engines
 | Engine | Input | Output |
 |---|---|---|
-| **A** Psychology Explainer | Concept | `01_hook.png`…`04_shift.png` + `explainer.mp4` (~10s, with typing sound + music) |
-| **B** Random Fact Slideshow | Hook | 6 PNGs (cover + 5 points) for a photo carousel + `slideshow.mp4` (~32s, same slides animated, with typing sound + music) |
+| **A** Explainer | Concept | `01_hook.png`…`04_shift.png` + `explainer.mp4` (~10s, with typing sound + music) |
+| **B** Slideshow | Hook | 6 PNGs (cover + 5 points) for a photo carousel + `slideshow.mp4` (~32s, same slides animated, with typing sound + music) |
 | **C** Podcast Clipper | YouTube URL or local `.mp4` | `clip.mp4`, a 9:16 video under 1 minute with the speaker centred and word-highlighted subtitles |
 | **D** Brain Test | Nothing - one key press | `brain_test.mp4` (~30-45s): 3-4 timed mini-game rounds. Video only (no PNGs), no Claude needed |
 | **E** Which One Are You | Format + topic (Enter = 10 suggestions) | `identity.mp4` (~25-30s): "How many apply to you?" checklist or "Pick one" reveal, + PNGs |
 
-- Every run is saved to `output/<engine>/<date>_<slug>/`, one folder per engine (`A - Psychology Explainer`, `B - Random Fact Slideshow`, `C - Podcast Clipper`, `D - Brain Test`, `E - Which One Are You`), together with `caption.txt` (a TITLE block, then a DESCRIPTION block with the caption, credit and hashtags) and `script.json`.
+- Engine names come from your profile (`[engines.names]`); the original SYNERGIA setup calls A and B "Psychology Explainer" and "Random Fact Slideshow".
+- Every run is saved to `output/<engine>/<date>_<slug>/`, one folder per engine (e.g. `A - Explainer`), together with `caption.txt` (a TITLE block, then a DESCRIPTION block with the caption, credit and hashtags) and `script.json`.
 - **Engine C:** type a range such as `12:30-13:15`, or press Enter to transcribe the whole episode and get 5 suggested moments. The suggestions come from Claude; type `s` to use the offline heuristic instead.
 - Transcripts are cached, so re-clipping the same episode is instant.
 - **Engine C credits:** for a URL, `caption.txt` gets a credit block with the channel, the video title and the link. For a local file, you're asked who to credit; press Enter to skip. The prefix is `credit_prefix` in `config.toml`. Engine C is meant for podcasts whose creators allow clipping (many run open clipping programs); every clip credits and links the original episode, and the rights stay with the original creator.
@@ -66,8 +94,7 @@ Either way, you then review the script, edit any field (mark highlighted words w
 - **Typing sound (A, B, D and E videos):** real recorded keystrokes (`assets/sounds/keys/`, CC0) are synced to each letter as it appears. To use a different keyboard, swap in your own 16-bit `.wav` files. To change or turn it off, use `[sound]` in `config.toml`.
 - **Background music (A and B videos):** each video gets a random CC0 lofi track from `assets/music/`, volume-matched, faded in and out, and mixed under the typing. Credits are in `assets/music/LICENSE.txt`, and the track used is saved as `music` in `script.json`. To add your own tracks, drop `.mp3`/`.ogg` files into that folder. Volume and on/off are in `[sound]` in `config.toml`.
 - **Clip length (C):** every clip stays under 1 minute. Anything longer is trimmed at the last sentence that ends in time (`hard_max_seconds`).
-- **Engines A and B (look):** a textured off-white "paper" sheet (grain, soft unevenness and a faint blue/lavender wash), navy text and blue/purple accents. Headlines are Instrument Serif with **highlighted** words in blue italic; Engine A's two paragraph slides use Newsreader only, with highlighted words in blue. Every slide has a footer with the logo mark, "Synergia" and a page count (left-aligned; centred on A's last slide). Colours and texture strength are in `[paper]` in `config.toml`, fonts in `[fonts]`.
-- **Engines D and E (look):** light "test sheet" slides: the same paper texture with each slide's content on a white card, navy text and blue/purple accents, all in Bricolage Grotesque (highlighted words only change colour). Every slide has a header ("02  Quick math", "Quick quiz") over a thin line and a page count in the footer; covers and endings end with a "Your score ___ / 4" line. `style` in `[quiz]` can switch the surface to `"grid"` (graph paper) or `"cobalt"` (blue background with the white card).
+- **Look:** set by the profile's theme (see the table above). Every slide has a footer with the profile's logo, name and a page count. Engine A's two paragraph slides use one font only, with highlighted words in colour. Engines D and E use "test sheet" slides: a header ("02  Quick math", "Quick quiz"), a page count, and a "Your score ___ / 4" line on covers and endings.
 
 ## Uploading to YouTube
 Synergia can upload a rendered video as a YouTube Short through the official YouTube Data API. It's free, and nothing is posted without you confirming it.
@@ -118,4 +145,6 @@ Open the **Autopilot** page in the browser interface (`python main.py --gui`). I
 All settings are in `[autopilot]` in `config.toml`: `count`, `mix`, `channels`, `min_episode_minutes`, `daily_upload_limit` and `upload_time`.
 
 ## Customising
-All brand tokens are in `config.toml`: colours, fonts, safe zone, timings, subtitle size and position, and Whisper models.
+- **Your brand and niche** (`profiles/<name>/profile.toml`, written by the setup wizard): `[brand]` name and logo, `[theme]` preset, `[voice]` niche / audience / tone / subjects / examples, `[engine_a.wording]` slide labels and step instructions, `[hashtags]` per format, `[engines]` which formats are on and their names, `[engine_c] keywords`.
+- **Themes** are defined in `synergia/brand/themes.py`; a preset sets the fonts, colours (`[paper]`, `[quiz]`) and layout (`[layout]`: background, alignment, highlight style, header style). Override single values in the profile (e.g. `[paper] accent = "#FF5500"` or `[layout] align = "center"`).
+- **Technical defaults** stay in `config.toml`: safe zone, timings, sound, subtitle size and position, Whisper models, YouTube and Autopilot settings.

@@ -1,8 +1,14 @@
-# Synergia configuration — every visual/tunable lives here. Edit freely.
+# Synergia defaults and technical settings.
+#
+# Your own choices (brand name, logo, niche, theme, engines...) live in profile.toml, which the
+# setup wizard writes on first launch and the Settings page edits later. profile.toml is merged
+# over this file, so anything below can be overridden there. Look/colour sections ([paper],
+# [quiz], fonts) come from the chosen theme preset (synergia/brand/themes.py).
 
-# Name, canvas size, and the dark colours used by Engine C's subtitles and the browser interface.
+# Name, canvas size, and the dark colours of the browser interface.
 [brand]
-name = "SYNERGIA"
+name = "My Brand"
+logo = ""                 # PNG with transparency, shown in every slide footer ("" = drawn mark)
 width = 1080
 height = 1920
 background = "#0A0B1A"
@@ -16,44 +22,81 @@ bold = "assets/fonts/Inter-Bold.ttf"
 semibold = "assets/fonts/Inter-SemiBold.ttf"
 medium = "assets/fonts/Inter-Medium.ttf"
 black = "assets/fonts/Inter-Black.ttf"
-# Engine A / B "paper" slides: Instrument Serif headlines, Inter Display text.
-serif = "assets/fonts/InstrumentSerif-Regular.ttf"
-serif_italic = "assets/fonts/InstrumentSerif-Italic.ttf"
-display_medium = "assets/fonts/InterDisplay-Medium.ttf"
-display_semibold = "assets/fonts/InterDisplay-SemiBold.ttf"
-display_bold = "assets/fonts/InterDisplay-Bold.ttf"
-# Engines D / E quiz slides: Bricolage Grotesque (a variable font) in four weights.
-quiz_heavy = "assets/fonts/BricolageGrotesque.ttf|Weight=800,Optical Size=48"
-quiz_bold = "assets/fonts/BricolageGrotesque.ttf|Weight=700,Optical Size=48"
-quiz_semibold = "assets/fonts/BricolageGrotesque.ttf|Weight=600,Optical Size=48"
-quiz_medium = "assets/fonts/BricolageGrotesque.ttf|Weight=500,Optical Size=48"
-# Engine A's paragraph slides (2 and 3): one font for the header and the text.
-# A variable font takes its axes after "|", e.g. "assets/fonts/X.ttf|Weight=500".
-paragraph = "assets/fonts/Newsreader.ttf|Weight=480,Optical Size=36"
+# The slide fonts (serif / serif_italic = headlines, display_medium / display_semibold = text,
+# paragraph = Engine A slides 2-3, numeral = Engine B numbers, quiz_* = Engines D / E) come from
+# the theme. A variable font takes its axes after "|", e.g. "assets/fonts/X.ttf|Weight=500".
 line_spacing = 1.2
 
-# Engine A / B look: textured off-white paper, navy ink, blue + purple accents.
-[paper]
-background = "#F6F5FC"    # paper colour (cool white)
-ink = "#14143C"           # main text (deep navy)
-soft = "#585C84"          # body text under titles, captions, page numbers
-accent = "#2F4BFF"        # highlighted words (blue serif italic)
-accent2 = "#7457F5"       # numbers and small labels (purple)
-grain = 0.026             # paper grain (0 = off)
-mottle = 0.016            # soft, cloudy unevenness of the paper (0 = off)
-tint = 0.035              # faint blue / lavender wash across the sheet (0 = off)
+# The look: synergia, notebook, cobalt, midnight, sunset or minimal (synergia/brand/themes.py).
+# A theme sets the fonts and colours plus:
+#   [paper]  Engine A / B colours (background, background2, ink, soft, accent, accent2) and
+#            texture (grain, mottle, tint)
+#   [layout] bg = paper | grid | gradient | flat, align = left | center,
+#            highlight = italic | color | marker | underline (marker, marker_ink),
+#            header = rule | pill | plain
+#   [quiz]   Engine D / E style = sheet | grid | cobalt | plain, surface, text, muted, accents
+# Override any single value in your profile, e.g. [paper] accent = "#FF5500".
+[theme]
+preset = "synergia"
 
-# Engine D / E look: light "test sheet" slides. style = "sheet" (paper + white card),
-# "grid" (graph paper) or "cobalt" (blue background + white card).
 [quiz]
-style = "sheet"
-surface = "#FFFFFF"       # card colour
-text = "#14143C"          # navy
-muted = "#6A6E96"         # secondary text, prompts, small notes
-accent = "#2F4BFF"        # highlighted words, answers, timer (blue)
-accent2 = "#7457F5"       # numbers, score, small details (purple)
 cobalt = "#2A45F2"        # "cobalt" style: top of the screen
 cobalt2 = "#4A2FD6"       # "cobalt" style: bottom of the screen
+
+# ---------------------------------------------------------------- your niche
+# Everything Claude writes follows this. The setup wizard drafts it from a short description.
+[voice]
+niche = "everyday life, useful ideas and real experiences"   # "...a short-form brand about <niche>."
+niche_short = "everyday life, useful ideas"                    # podcast clip finder: "editor for <name> (<niche_short>)"
+clip_payoff = "a useful idea or a raw human experience"        # what a good podcast clip delivers
+audience = ""                                                  # optional, e.g. "busy parents in their 30s"
+tone = 'minimalist, direct, second-person ("you"), slightly provocative, emotionally sharp'
+topic_scope = ["habits", "work", "relationships", "money", "health", "self-image"]
+concept_kind = "ideas for 10-second explainers: named effects, rules, laws or phenomena"
+concept_examples = []                                          # e.g. ["The Spotlight Effect"]
+carousel_kind = "practical-advice"                             # "hooks for 5-point <carousel_kind> carousels"
+hook_examples = []                                             # e.g. ["5 things people regret not doing after 25"]
+
+# Example text shown in the app's input boxes and given to Claude as style examples.
+[voice.examples]
+concept = "The Spotlight Effect"
+hook = "5 habits that quietly change your year"
+checklist_cover = "signs you **overthink** everything"
+pick_cover = "Pick a **door** and see what it says about you"
+checklist_topic = "signs you're secretly a night owl"
+pick_topic = "pick a door to see your work style"
+
+# Engine A's 4 steps. The step keys stay the same; the labels and instructions are yours.
+[engine_a.wording]
+kind = ""                                          # "Write a 10-second <kind> explainer" ("" = no word)
+intro_label = "Explained in 10 seconds"            # under the title on slide 1
+step_labels = ["The problem", "How it works", "The takeaway"]   # headers of slides 2, 3, 4
+title_template = "{concept}, explained in 10 seconds"
+hook_line = 'the "why it matters" line that follows "<Concept> explained in 10 seconds:"'
+gotcha = "a hyper-relatable scenario that makes the viewer feel seen"
+mechanism = "how it actually works, in plain language"
+shift = "one punchy concluding sentence that reframes everything"
+
+# The first hashtag of each list is suggested to Claude; Engine D samples from its list.
+[hashtags]
+A = []
+B = []
+C = ["#podcast"]
+D = ["#braintest", "#brainteaser", "#iqtest", "#puzzle", "#challenge", "#focus", "#memorytest",
+     "#mindgames"]
+E_checklist = []
+E_pick = ["#personalitytest"]
+
+[engines]
+enabled = ["A", "B", "C", "D", "E"]
+
+# Names shown in the app and used for output folders (output/A - <name>/...).
+[engines.names]
+A = "Explainer"
+B = "Slideshow"
+C = "Podcast Clipper"
+D = "Brain Test"
+E = "Which One Are You"
 
 # Safe zone for TikTok / Reels / Shorts UI (pixels on the 1080x1920 canvas).
 [safe_zone]
@@ -126,6 +169,9 @@ title_seconds = 3.5
 title_y = 270              # top edge of the title box (safe zone starts at 250)
 # Caption credit line for the original creator (channel + video title + link are filled in).
 credit_prefix = "🎙️ Credit:"
+# Offline clip finder ("s" instead of Claude): words that make a moment on-topic for your niche.
+keywords = ["mistake", "lesson", "secret", "truth", "habit", "success", "fail", "money", "life",
+            "learned", "advice", "change", "fear", "love", "work"]
 
 [claude]
 # How Synergia gets scripts, topic ideas and highlights from Claude:

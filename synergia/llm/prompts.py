@@ -1,11 +1,38 @@
-"""Prompt templates for the Claude Pro clipboard bridge."""
+"""Prompt templates for Claude (Claude Code or the clipboard bridge).
+
+Everything niche-specific (brand name, niche, tone, examples, Engine A wording, hashtags) comes
+from the user's profile via CFG ([brand], [voice], [engine_a.wording], [engine_a.example],
+[hashtags]); the formats, rules and JSON schemas are fixed here.
+"""
 from __future__ import annotations
 
-BRAND_VOICE = """You are the head writer for SYNERGIA, a faceless short-form brand (TikTok, Reels, Shorts)
-about human psychology, life advice and real experiences.
-Voice: minimalist, direct, second-person ("you"), slightly provocative, emotionally sharp.
+from synergia.config import CFG
+
+
+def _get(ns, key: str, default=None):
+    return getattr(ns, key, default) if ns is not None else default
+
+
+def brand_voice() -> str:
+    v = CFG.voice
+    audience = _get(v, "audience", "")
+    aud = f"\nAudience: {audience}." if audience else ""
+    return f"""You are the head writer for {CFG.brand.name}, a faceless short-form brand (TikTok, Reels, Shorts)
+about {v.niche}.{aud}
+Voice: {v.tone}.
 No fluff, no emojis, no hashtags inside the text, no clichés like "In today's world".
 Every sentence must be short and readable on a phone screen in under 3 seconds."""
+
+
+def _tags(key: str, rest: str = "5-8 relevant hashtags") -> str:
+    """The "hashtags" schema line: the profile's first hashtag for this format as a seed."""
+    tags = list(_get(CFG.hashtags, key, []) or [])
+    seed = f'"{tags[0]}", ' if tags else ""
+    return f'[{seed}"...", "{rest}"]'
+
+
+def _examples():
+    return CFG.voice.examples
 
 JSON_RULES = """OUTPUT RULES:
 - Reply with ONE ```json code block and nothing else.
@@ -14,24 +41,28 @@ JSON_RULES = """OUTPUT RULES:
   Never highlight more than 3 words per field."""
 
 
-def psychology_prompt(concept: str) -> str:
-    return f"""{BRAND_VOICE}
+def _tone_reference() -> str:
+    ex = _get(CFG.engine_a, "example")
+    if ex is None:
+        return ""
+    lines = "\n".join(f'- {k}: "{getattr(ex, k)}"' for k in ("hook_line", "gotcha", "mechanism", "shift"))
+    return f'TONE REFERENCE (concept "{ex.concept}"):\n{lines}\n\n'
 
-TASK: Write a 10-second psychology explainer about: "{concept}"
+
+def psychology_prompt(concept: str) -> str:
+    w = CFG.engine_a.wording
+    kind = f"{w.kind} " if w.kind else ""
+    return f"""{brand_voice()}
+
+TASK: Write a 10-second {kind}explainer about: "{concept}"
 
 Use this exact 4-step formula:
-1. hook_line — the "why it matters" line that follows "<Concept> explained in 10 seconds:" (max 10 words).
-2. gotcha — "The Mirror": a hyper-relatable scenario that makes the viewer feel caught (max 40 words).
-3. mechanism — how the brain tricks them, in plain language (max 35 words).
-4. shift — one punchy concluding sentence that reframes everything (max 20 words).
+1. hook_line — {w.hook_line} (max 10 words).
+2. gotcha — {w.gotcha} (max 40 words).
+3. mechanism — {w.mechanism} (max 35 words).
+4. shift — {w.shift} (max 20 words).
 
-TONE REFERENCE (concept "The Spotlight Effect"):
-- hook_line: "Why you **overthink** everything you do."
-- gotcha: "Think about that slightly awkward thing you said three days ago. You've replayed it 20 times. Meanwhile, the person you said it to **forgot it** 10 seconds later."
-- mechanism: "Because you are the center of your own universe, your brain assumes everyone is **watching and judging** you as closely as you watch yourself."
-- shift: "Nobody is keeping score of your mistakes — they're too busy worrying about **how they look to you**."
-
-{JSON_RULES}
+{_tone_reference()}{JSON_RULES}
 
 JSON SCHEMA:
 ```json
@@ -43,13 +74,13 @@ JSON SCHEMA:
   "mechanism": "...",
   "shift": "...",
   "caption": "1-2 sentence post caption that drives comments (no hashtags)",
-  "hashtags": ["#psychology", "...", "5-8 relevant hashtags"]
+  "hashtags": {_tags("A")}
 }}
 ```"""
 
 
 def listicle_prompt(hook: str) -> str:
-    return f"""{BRAND_VOICE}
+    return f"""{brand_voice()}
 
 TASK: Write a 6-slide photo carousel. Slide 1 is the cover hook; slides 2-6 are 5 points.
 User's hook: "{hook}"
@@ -77,14 +108,15 @@ JSON SCHEMA:
     {{"title": "...", "body": "..."}}
   ],
   "caption": "1-2 sentence post caption that drives saves/comments (no hashtags)",
-  "hashtags": ["#lifeadvice", "...", "5-8 relevant hashtags"]
+  "hashtags": {_tags("B")}
 }}
 ```"""
 
 
 def highlights_prompt(transcript: str, min_s: int, max_s: int, title: str = "", n: int = 5) -> str:
     src = f' from "{title}"' if title else ""
-    return f"""You are a viral short-form video editor for SYNERGIA (psychology, life advice, real experiences).
+    v = CFG.voice
+    return f"""You are a viral short-form video editor for {CFG.brand.name} ({v.niche_short}).
 
 TASK: Below is a timestamped podcast transcript{src}. Find the {n} best self-contained moments
 to cut into vertical Shorts/Reels/TikToks.
@@ -93,7 +125,7 @@ A great clip:
 - is {min_s}-{max_s} seconds long (HARD LIMIT: strictly under 60 seconds),
 - STARTS on a strong hook line (a bold claim, a question, a surprising story beat) — never mid-thought,
 - ENDS on a complete thought / punchline,
-- makes sense with zero context, and delivers psychology, life advice or a raw human experience.
+- makes sense with zero context, and delivers {v.clip_payoff}.
 Clips must not overlap each other.
 
 Use timestamps exactly as they appear in the transcript (mm:ss or h:mm:ss).
@@ -111,7 +143,7 @@ JSON SCHEMA:
       "title": "short on-screen hook title, max 8 words",
       "why": "one sentence: why this will retain viewers",
       "caption": "1-2 sentence post caption (no hashtags)",
-      "hashtags": ["#podcast", "...", "5-8 hashtags"]
+      "hashtags": {_tags("C", "5-8 hashtags")}
     }}
   ]
 }}
@@ -143,7 +175,7 @@ Sound like a real person posting, not like an AI or an ad:
 
 
 def checklist_prompt(topic: str, n: int) -> str:
-    return f"""{BRAND_VOICE}
+    return f"""{brand_voice()}
 
 TASK: Write a "How many apply to you?" checklist video about: "{topic}"
 Viewers count how many of the signs fit them and comment their score.
@@ -151,7 +183,7 @@ Viewers count how many of the signs fit them and comment their score.
 {SELF_ID_RULES}
 
 Rules:
-- cover_title: starts with the number {n}, max 12 words, e.g. "{n} signs you **overthink** everything".
+- cover_title: starts with the number {n}, max 12 words, e.g. "{n} {_examples().checklist_cover}".
 - signs: exactly {n} items, each max 9 words, written in second person as a habit or moment
   ("You rehearse phone calls before making them"). No numbering, no ending period needed.
 - Order them from most common to most specific, so the last ones feel like "how did they know".
@@ -165,13 +197,13 @@ JSON SCHEMA:
   "cover_title": "...",
   "signs": ["...", "..."],
   "caption": "1 sentence that asks for their score in the comments (no hashtags)",
-  "hashtags": ["#psychology", "...", "5-8 relevant hashtags"]
+  "hashtags": {_tags("E_checklist")}
 }}
 ```"""
 
 
 def pick_prompt(topic: str, n: int) -> str:
-    return f"""{BRAND_VOICE}
+    return f"""{brand_voice()}
 
 TASK: Write a "Pick one" reveal video about: "{topic}"
 The viewer sees {n} options, picks one, then each option reveals what it says about them.
@@ -182,7 +214,7 @@ Rules:
 - style: how the options look. One of "numbers", "colours", "shapes", "doors" - pick what fits the topic best.
   For "colours" give every option a "color" (hex like "#4F8CFF", clearly different from each other, readable on a dark background).
   For "shapes" give every option a "shape": one of circle, triangle, square, star, hexagon, diamond (all different).
-- cover_title: the setup in one plain sentence, max 12 words, e.g. "Pick a **door** and see what it says about you"
+- cover_title: the setup in one plain sentence, max 12 words, e.g. "{_examples().pick_cover}"
 - options: exactly {n}. "label" max 3 words (e.g. "Door 1", "Ocean blue", "The triangle").
   "trait" max 25 words: what picking it says about them - flattering but specific, so people share it.
 
@@ -198,20 +230,22 @@ JSON SCHEMA:
     {{"label": "...", "trait": "...", "color": "#hex (colours only)", "shape": "(shapes only)"}}
   ],
   "caption": "1 sentence that asks which one they picked (no hashtags)",
-  "hashtags": ["#personalitytest", "...", "5-8 relevant hashtags"]
+  "hashtags": {_tags("E_pick")}
 }}
 ```"""
 
 
 def topics_prompt(mode: str, past: list[str]) -> str:
-    kind = ('"How many apply to you?" checklists (e.g. "signs you\'re a high-functioning overthinker")'
+    ex = _examples()
+    kind = (f'"How many apply to you?" checklists (e.g. "{ex.checklist_topic}")'
             if mode == "checklist" else
-            '"Pick one" personality reveals (e.g. "pick a door to reveal your hidden strength")')
+            f'"Pick one" personality reveals (e.g. "{ex.pick_topic}")')
     avoid = "\n".join(f"- {t}" for t in past[:40]) or "- (none yet)"
-    return f"""{BRAND_VOICE}
+    scope = ", ".join(CFG.voice.topic_scope)
+    return f"""{brand_voice()}
 
 TASK: Suggest 10 fresh topics for {kind}.
-Topics should be about psychology, relationships, habits, work, friendship, self-image - things
+Topics should be about {scope} - things
 people instantly recognise themselves in and want to comment on. Mix light and deep.
 {SELF_ID_RULES}
 
@@ -224,21 +258,25 @@ Reply with ONE ```json code block and nothing else. Valid JSON only.
 ```"""
 
 
-IDEA_KINDS = {
-    "concepts": ('psychology concepts for 10-second explainers: named effects, biases, laws or '
-                 'phenomena (e.g. "The Spotlight Effect", "The Zeigarnik Effect")',
-                 "Use the concept's real, searchable name. Max 6 words each."),
-    "hooks": ('hooks for 5-point life-advice carousels (e.g. "5 things people regret not doing '
-              'after 25", "5 signs someone truly respects you")',
-              "Each hook names its 5 points and promises a specific payoff. Max 12 words each."),
-}
+def _eg(items: list[str]) -> str:
+    return (" (e.g. " + ", ".join(f'"{x}"' for x in items[:2]) + ")") if items else ""
+
+
+def idea_kinds() -> dict[str, tuple[str, str]]:
+    v = CFG.voice
+    return {
+        "concepts": (f"{v.concept_kind}{_eg(v.concept_examples)}",
+                     "Use the concept's real, searchable name. Max 6 words each."),
+        "hooks": (f"hooks for 5-point {v.carousel_kind} carousels{_eg(v.hook_examples)}",
+                  "Each hook names its 5 points and promises a specific payoff. Max 12 words each."),
+    }
 
 
 def ideas_prompt(kind: str, n: int, past: list[str]) -> str:
     """Fresh topics for Engine A ("concepts") or Engine B ("hooks"), avoiding past ones."""
-    what, rule = IDEA_KINDS[kind]
+    what, rule = idea_kinds()[kind]
     avoid = "\n".join(f"- {t}" for t in past[:60]) or "- (none yet)"
-    return f"""{BRAND_VOICE}
+    return f"""{brand_voice()}
 
 TASK: Suggest {n} fresh {what}.
 Pick ones that make people stop scrolling, recognise themselves and comment. Mix light and deep.

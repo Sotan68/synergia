@@ -92,6 +92,9 @@ class TextLayout:
     # two match optically.
     accent_weight: str | None = None
     accent_scale: float = 1.0
+    # Optional highlight drawn with accent runs: a highlighter bar behind them, or an underline.
+    marker: tuple[int, int, int] | None = None
+    underline: tuple[int, int, int] | None = None
     _sprites: dict = field(default_factory=dict, repr=False)
     _edges: dict = field(default_factory=dict, repr=False)
 
@@ -110,6 +113,11 @@ class TextLayout:
             a, d = max(a, a2), max(d, d2)
         return a, d
 
+    @property
+    def _m(self) -> int:
+        """Sprite margin: room for a highlighter bar's padding around the letters."""
+        return 4 + (round(self.size * 0.14) if self.marker else 0)
+
     def _word_len(self, w: "PlacedWord") -> float:
         return sum(self.run_font(acc).getlength(t) for t, acc in w.runs)
 
@@ -127,31 +135,45 @@ class TextLayout:
         return TextLayout([PlacedWord(w.runs, w.x + dx, w.y + dy, w.line) for w in self.words],
                           self.size, self.weight, Box(b.x + dx, b.y + dy, b.w, b.h), self.height,
                           self.top + dy, self.color, self.accent_color, self.accent_weight,
-                          self.accent_scale)
+                          self.accent_scale, self.marker, self.underline)
 
     def sprite(self, i: int) -> tuple[Image.Image, int, int]:
         """RGBA sprite of word i and its top-left paste position."""
         if i not in self._sprites:
             w = self.words[i]
             asc, desc = self._metrics()
+            m = self._m
             # extra room on the right: italic overhang
-            width = int(self._word_len(w)) + 8 + (self.size // 6 if self.accent_weight else 0)
-            im = Image.new("RGBA", (width, asc + desc + 8), (0, 0, 0, 0))
+            width = int(self._word_len(w)) + 2 * m + (self.size // 6 if self.accent_weight else 0)
+            im = Image.new("RGBA", (width, asc + desc + 2 * m), (0, 0, 0, 0))
             d = ImageDraw.Draw(im)
-            x = 4.0
+            base, x = m + asc, float(m)
+            for text, acc in w.runs:          # highlights first, so the letters sit on top
+                f = self.run_font(acc)
+                ln = f.getlength(text)
+                if acc and self.marker:
+                    d.rounded_rectangle([x - m + 2, base - self.size * 0.80, x + ln + m - 2,
+                                         base + self.size * 0.20], radius=self.size * 0.12,
+                                        fill=tuple(self.marker) + (255,))
+                if acc and self.underline:
+                    t = max(3, round(self.size * 0.07))
+                    y = base + round(self.size * 0.12)
+                    d.rectangle([x, y, x + ln, y + t], fill=tuple(self.underline) + (255,))
+                x += ln
+            x = float(m)
             for text, acc in w.runs:
                 col = self.accent_color if acc else self.color
                 f = self.run_font(acc)
-                d.text((x, 4 + asc), text, font=f, fill=col + (255,), anchor="ls")
+                d.text((x, base), text, font=f, fill=col + (255,), anchor="ls")
                 x += f.getlength(text)
-            self._sprites[i] = (im, w.x - 4, w.y - asc - 4)
+            self._sprites[i] = (im, w.x - m, w.y - asc - m)
         return self._sprites[i]
 
     def char_edges(self, i: int) -> list[int]:
         """x boundaries (sprite coords) of each character of word i: len(text) + 1 values."""
         if i not in self._edges:
             spr, _, _ = self.sprite(i)
-            edges, x0 = [0], 4.0
+            edges, x0 = [0], float(self._m)
             for text, acc in self.words[i].runs:
                 f = self.run_font(acc)
                 for k in range(1, len(text) + 1):
@@ -223,7 +245,7 @@ def layout_text(text: str, box: Box, weight: str = "bold", max_size: int = 96,
                 min_size: int = 34, align: str = "left", valign: str = "center",
                 line_spacing: float | None = None, color=TEXT, accent_color=ACCENT,
                 all_accent: bool = False, accent_weight: str | None = None,
-                accent_scale: float = 1.0) -> TextLayout:
+                accent_scale: float = 1.0, marker=None, underline=None) -> TextLayout:
     """Find the largest size in [min_size, max_size] at which the text fits the box.
 
     accent_weight / accent_scale: font (and size factor) for **accent** words, e.g. a serif
@@ -277,4 +299,4 @@ def layout_text(text: str, box: Box, weight: str = "bold", max_size: int = 96,
             placed.append(PlacedWord(runs, int(x), int(baseline), li))
             x += wl + space
     return TextLayout(placed, size, weight, box, total_h, top, color, accent_color,
-                      accent_weight, accent_scale)
+                      accent_weight, accent_scale, marker, underline)

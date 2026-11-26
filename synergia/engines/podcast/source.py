@@ -27,7 +27,7 @@ def _credit(info: dict) -> dict:
 def download(url: str) -> tuple[Path, str, dict]:
     import yt_dlp
 
-    out_dir = CFG.output.cache_dir / "downloads"
+    out_dir = CFG.output.shared_cache / "downloads"     # shared by all profiles
     out_dir.mkdir(parents=True, exist_ok=True)
     h = CFG.engine_c.max_download_height
     opts = {

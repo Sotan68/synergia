@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 
 from synergia.brand import paper
 from synergia.brand.animate import Step, full_frame, render_video, scaled_duration
-from synergia.brand.canvas import Box, draw_safe_zone, safe_for
+from synergia.brand.canvas import CENTRE, Box, draw_safe_zone, safe_for
 from synergia.brand.typography import font, layout_text, strip_markup
 from synergia import history
 from synergia.config import CFG
@@ -58,9 +58,20 @@ def review_fields(data: dict) -> list[tuple[str, str]]:
 
 
 # ---------------------------------------------------------------- slides
-# The "paper" look (synergia.brand.paper): serif headlines with blue italic highlights, a large
-# purple serif numeral per point, Inter Display body text, page count in the footer.
+# The theme's look (synergia.brand.paper): headline font with the theme's highlight style, a large
+# numeral per point, text font for the body, page count in the footer; left-aligned or centred.
 N_SLIDES = 6
+
+
+def _col(height: int) -> Box:
+    """The text column: the safe zone, or a column centred on screen for centred themes."""
+    safe = safe_for(height)
+    return Box(CENTRE.x, safe.y, CENTRE.w, safe.h) if paper.CENTRED else safe
+
+
+def _soft_text() -> dict:
+    """Highlight style for the smaller text (subtitle, body): the theme's, in the softer colour."""
+    return {**paper.highlight("text"), "color": paper.SOFT}
 
 
 def _centred(top_area: int, bottom_area: int, height: int, lift: int = 40) -> int:
@@ -70,19 +81,18 @@ def _centred(top_area: int, bottom_area: int, height: int, lift: int = 40) -> in
 def _cover(data: dict, bg: Image.Image, swipe: bool = True) -> Step:
     """Cover: big serif title (+ subtitle) typed out; footer and swipe cue are static."""
     base = bg
-    safe = safe_for(base.height)
+    safe = _col(base.height)
     tall = base.height == CFG.brand.height
     title = layout_text(data["cover_title"], Box(safe.x, 0, safe.w, int(safe.h * 0.58)),
                         weight=paper.SERIF, max_size=160 if tall else 128, min_size=70,
-                        valign="top", line_spacing=1.0, color=paper.INK,
-                        accent_color=paper.ACCENT, accent_weight=paper.SERIF_I)
+                        valign="top", line_spacing=1.0, align=paper.ALIGN,
+                        **paper.highlight("headline"))
     layouts = [title]
     sub = None
     if data.get("cover_subtitle"):
         sub = layout_text(data["cover_subtitle"], Box(safe.x, 0, safe.w, int(safe.h * 0.16)),
                           weight=paper.TEXT_W, max_size=46, min_size=34, valign="top",
-                          color=paper.SOFT, accent_color=paper.ACCENT,
-                          accent_weight=paper.SERIF_I, accent_scale=paper.SERIF_IN_SANS)
+                          align=paper.ALIGN, **_soft_text())
     gap = 56
     total = title.height + (gap + sub.height if sub else 0)
     title = title.moved(dy=_centred(safe.y, safe.bottom - 110, total))
@@ -100,18 +110,16 @@ GAP_NUM, GAP_BODY = 64, 40
 
 def _point_parts(p: dict, height: int):
     """(numeral size, numeral cap height, title, body, block height) with the text at y = 0."""
-    safe = safe_for(height)
+    safe = _col(height)
     tall = height == CFG.brand.height
     num_size = 330 if tall else 240
     num_h = int(num_size * 0.72)            # cap height of the numeral
     title = layout_text(p["title"], Box(safe.x, 0, safe.w, int(safe.h * 0.30)), weight=paper.SERIF,
                         max_size=100 if tall else 84, min_size=56, valign="top",
-                        line_spacing=1.04, color=paper.INK, accent_color=paper.ACCENT,
-                        accent_weight=paper.SERIF_I)
+                        line_spacing=1.04, align=paper.ALIGN, **paper.highlight("headline"))
     body = layout_text(p["body"], Box(safe.x, 0, safe.w, int(safe.h * 0.28)), weight=paper.TEXT_W,
                        max_size=50, min_size=34, valign="top", line_spacing=1.36,
-                       color=paper.SOFT, accent_color=paper.ACCENT,
-                       accent_weight=paper.SERIF_I, accent_scale=paper.SERIF_IN_SANS)
+                       align=paper.ALIGN, **_soft_text())
     return num_size, num_h, title, body, num_h + GAP_NUM + title.height + GAP_BODY + body.height
 
 
@@ -122,8 +130,9 @@ def _point(i: int, p: dict, bg: Image.Image, top: int) -> Step:
     base = bg
     safe = safe_for(base.height)
     num_size, num_h, title, body, _ = _point_parts(p, base.height)
-    ImageDraw.Draw(base).text((safe.x - 6, top + num_h), f"{i:02d}",
-                              font=font(paper.SERIF_I, num_size), fill=paper.ACCENT2, anchor="ls")
+    at = (base.width // 2, top + num_h) if paper.CENTRED else (safe.x - 6, top + num_h)
+    ImageDraw.Draw(base).text(at, f"{i:02d}", font=font(paper.NUM_W, num_size), fill=paper.ACCENT2,
+                              anchor="ms" if paper.CENTRED else "ls")
     title = title.moved(dy=top + num_h + GAP_NUM)
     body = body.moved(dy=title.top + title.height + GAP_BODY)
     paper.footer(base, i + 1, N_SLIDES)
@@ -133,6 +142,9 @@ def _point(i: int, p: dict, bg: Image.Image, top: int) -> Step:
 def build_steps(data: dict, seed: int, height: int | None = None,
                 swipe: bool = True) -> list[Step]:
     h = height or CFG.brand.height
+    from synergia.brand import layouts
+    if layouts.active() and h == CFG.brand.height:     # the theme has its own blueprint
+        return layouts.build_b(data, seed, swipe, N_SLIDES)
     safe = safe_for(h)
     tallest = max(_point_parts(p, h)[-1] for p in data["points"])
     top = _centred(safe.y, safe.bottom - 110, tallest, lift=20)

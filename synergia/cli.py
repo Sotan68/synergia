@@ -15,11 +15,12 @@ from synergia.config import CFG
 from synergia.engines import listicle, psychology
 from synergia.brand.typography import strip_markup
 from synergia.llm.bridge import Cancelled, ask_claude, review
+from synergia.output import ENABLED, ENGINE_NAMES
 from synergia.video import have_ffmpeg
 
 console = Console()
 
-BANNER = """[bold #8FA8FF]S Y N E R G I A[/bold #8FA8FF]
+BANNER = f"""[bold #8FA8FF]{" ".join(CFG.brand.name.upper())}[/bold #8FA8FF]
 [#8B90B8]Zero-cost short-form content engine[/#8B90B8]"""
 
 
@@ -215,11 +216,11 @@ def upload_menu() -> None:
 
 def engine_a(is_demo: bool, debug: bool) -> None:
     concept = demo.PSYCHOLOGY["concept"] if is_demo else \
-        Prompt.ask("[bold]Concept[/bold] [dim](e.g. The Spotlight Effect)[/dim]").strip()
+        Prompt.ask(f"[bold]Concept[/bold] [dim](e.g. {escape(CFG.voice.examples.concept)})[/dim]").strip()
     if not concept:
         return
     data = _script_loop(psychology, concept, demo.PSYCHOLOGY if is_demo else None,
-                        f"Psychology Explainer: {concept}")
+                        f"{ENGINE_NAMES['A']}: {concept}")
     with console.status("[yellow]Rendering frames and video…"):
         out = psychology.produce(data, debug=debug)
     _done(out)
@@ -227,7 +228,7 @@ def engine_a(is_demo: bool, debug: bool) -> None:
 
 def engine_b(is_demo: bool, debug: bool) -> None:
     hook = demo.LISTICLE["cover_title"] if is_demo else \
-        Prompt.ask("[bold]Hook[/bold] [dim](e.g. 5 things people regret not doing after 25)[/dim]").strip()
+        Prompt.ask(f"[bold]Hook[/bold] [dim](e.g. {escape(CFG.voice.examples.hook)})[/dim]").strip()
     if not hook:
         return
     data = _script_loop(listicle, hook, demo.LISTICLE if is_demo else None, f"Slideshow: {hook}")
@@ -258,8 +259,8 @@ def _pick_topic(mode: str) -> str:
     from synergia import history
     from synergia.llm.prompts import topics_prompt
 
-    example = ("signs you're a high-functioning overthinker" if mode == "checklist" else
-               "pick a door to reveal your hidden strength")
+    ex = CFG.voice.examples
+    example = escape(ex.checklist_topic if mode == "checklist" else ex.pick_topic)
     topic = Prompt.ask(f"[bold]Topic[/bold] [dim](e.g. {example}; Enter = suggest 10)[/dim]",
                        default="", show_default=False).strip()
     if topic:
@@ -294,7 +295,7 @@ def engine_e(is_demo: bool, debug: bool) -> None:
     topic = strip_markup(demo_data["cover_title"]) if demo_data else _pick_topic(mode)
     if not topic:
         return
-    data = _script_loop(eng, topic, demo_data, f"Which One Are You: {topic}")
+    data = _script_loop(eng, topic, demo_data, f"{ENGINE_NAMES['E']}: {topic}")
     data["topic"] = topic
     with console.status("[yellow]Rendering slides and video…"):
         produce = identity.produce_pick if mode == "pick" else identity.produce_checklist
@@ -302,7 +303,85 @@ def engine_e(is_demo: bool, debug: bool) -> None:
     _done(out)
 
 
+def setup_wizard() -> bool:
+    """First launch in the console: brand, niche (Claude drafts the writing), theme, engines.
+    Writes profile.toml. The browser version (python main.py --gui) also lets you edit every
+    drafted field and shows theme previews. Returns True if a profile was saved."""
+    from synergia import profile
+    from synergia.brand import themes
+
+    console.print(Panel("[bold]Set up your Synergia[/bold]\nA few questions; change anything later "
+                        "in profile.toml or the browser Settings page.", border_style="#A78BFA",
+                        expand=False))
+    name = Prompt.ask("[bold]Brand name[/bold] [dim](shown in every slide footer)[/dim]").strip()
+    desc = Prompt.ask("[bold]What is your channel about?[/bold] [dim](a sentence or two)[/dim]").strip()
+    audience = Prompt.ask("[bold]Who is it for?[/bold] [dim](optional)[/dim]", default="",
+                          show_default=False).strip()
+    if not name or not desc:
+        console.print("[red]A name and a description are needed.[/red]")
+        return False
+    try:
+        draft = ask_claude(profile.draft_prompt(name, desc, audience), profile.validate_draft,
+                           "Draft your brand")
+    except Cancelled:
+        return False
+    ea = draft["engine_a"]
+    console.print(f"\n[bold]Niche:[/bold] {escape(draft['niche'])}\n[bold]Tone:[/bold] {escape(draft['tone'])}"
+                  f"\n[bold]Engine A slides:[/bold] {escape(' / '.join(ea['step_labels']))}"
+                  f"\n[bold]Example concepts:[/bold] {escape(', '.join(draft['concept_examples']))}"
+                  f"\n[bold]Hashtags (A):[/bold] {escape(' '.join(draft['hashtags']['A']))}")
+    console.print("\n[bold]Themes:[/bold]")
+    keys = list(themes.THEMES)
+    for i, k in enumerate(keys, 1):
+        console.print(f"  [#8FA8FF]{i}[/#8FA8FF] {themes.THEMES[k]['label']}: "
+                      f"[dim]{escape(themes.THEMES[k]['blurb'])}[/dim]")
+    pick = Prompt.ask("Theme", choices=[str(i) for i in range(1, len(keys) + 1)], default="1")
+    suggested = "".join(draft["engines"])
+    raw = Prompt.ask("[bold]Engines[/bold] [dim](letters, e.g. ABDE)[/dim]", default=suggested)
+    engines = [e for e in "ABCDE" if e in raw.upper()] or list(suggested)
+    folder = profile.create(profile.from_draft(name, draft, keys[int(pick) - 1], engines, audience))
+    console.print(f"[green]Saved profiles/{folder}/profile.toml.[/green] Edit it any time, or use "
+                  f"Settings in the browser interface.")
+    return True
+
+
+def _restart() -> None:
+    """Start again so every module picks up the (new) active profile."""
+    import sys
+
+    env_argv = [a for a in sys.argv]
+    if "--profile" in env_argv:
+        i = env_argv.index("--profile")
+        del env_argv[i:i + 2]
+    os.environ.pop("SYNERGIA_PROFILE_NAME", None)
+    os.execv(sys.executable, [sys.executable, *env_argv])
+
+
+def profiles_menu() -> None:
+    """Switch to another profile, or set up a new one."""
+    from synergia.config import list_profiles, profile_dir, read_profile, set_active
+
+    names = list_profiles()
+    console.print("\n[bold]Profiles[/bold]")
+    for i, n in enumerate(names, 1):
+        label = (read_profile(profile_dir(n) / "profile.toml").get("brand") or {}).get("name") or n
+        mark = "[green]●[/green]" if n == CFG.profile_name else " "
+        console.print(f" {mark} [#8FA8FF]{i}[/#8FA8FF] {escape(str(label))} [dim]({n})[/dim]")
+    console.print("   [#8FA8FF]N[/#8FA8FF] New profile")
+    raw = Prompt.ask("Pick one (Enter = back)", default="", show_default=False).strip().lower()
+    if raw == "n":
+        if setup_wizard():
+            _restart()
+    elif raw.isdigit() and 1 <= int(raw) <= len(names) and names[int(raw) - 1] != CFG.profile_name:
+        set_active(names[int(raw) - 1])
+        _restart()
+
+
 def main(is_demo: bool = False, debug: bool = False) -> None:
+    if not CFG.configured:
+        if setup_wizard():   # start again so every module picks up the new profile
+            _restart()
+        return
     console.print(Panel(BANNER, border_style="#8FA8FF", expand=False, padding=(1, 4)))
     if not have_ffmpeg():
         console.print("[red]ffmpeg/ffprobe not found on PATH. Install ffmpeg and retry.[/red]")
@@ -310,21 +389,18 @@ def main(is_demo: bool = False, debug: bool = False) -> None:
     if is_demo:
         console.print("[dim]Demo mode: Engines A/B/E use built-in sample scripts (no Claude round-trip).[/dim]")
     while True:
-        console.print("\n[bold]Choose your Engine:[/bold]  "
-                      "[#8FA8FF]\\[A][/#8FA8FF] Psychology Explainer   "
-                      "[#8FA8FF]\\[B][/#8FA8FF] Random Fact Slideshow   "
-                      "[#8FA8FF]\\[C][/#8FA8FF] Podcast Clipper   "
-                      "[#8FA8FF]\\[D][/#8FA8FF] Brain Test   "
-                      "[#8FA8FF]\\[E][/#8FA8FF] Which One Are You   "
+        engines = "".join(f"[#8FA8FF]\\[{k}][/#8FA8FF] {escape(ENGINE_NAMES[k])}   " for k in ENABLED)
+        console.print(f"\n[dim]{escape(CFG.brand.name)}[/dim]  [bold]Choose your Engine:[/bold]  " + engines +
                       "[#8FA8FF]\\[U][/#8FA8FF] Upload to YouTube   "
+                      "[#8FA8FF]\\[P][/#8FA8FF] Profiles   "
                       "[dim]\\[Q] Quit[/dim]")
         try:
             raw = Prompt.ask(">", default="", show_default=False)
         except EOFError:
             return
-        letters = [ch for ch in raw.lower() if ch in "abcdeuq"]
+        letters = [ch for ch in raw.lower() if ch in "".join(ENABLED).lower() + "upq"]
         if not letters:
-            console.print("[dim]Type A, B, C, D, E, U or Q.[/dim]")
+            console.print(f"[dim]Type {', '.join(ENABLED)}, U, P or Q.[/dim]")
             continue
         choice = letters[0]
         if choice == "q":
@@ -340,6 +416,8 @@ def main(is_demo: bool = False, debug: bool = False) -> None:
                 engine_e(is_demo, debug)
             elif choice == "u":
                 upload_menu()
+            elif choice == "p":
+                profiles_menu()
             else:
                 engine_c(debug)
         except Cancelled:

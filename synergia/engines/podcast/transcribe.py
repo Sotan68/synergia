@@ -97,7 +97,7 @@ def _run(model, wav: Path, total: float, label: str) -> dict:
 def transcribe(video: Path, start: float | None = None, end: float | None = None,
                total_duration: float | None = None) -> dict:
     """Transcribe the whole file or [start, end). Times are always absolute (source timeline)."""
-    cache = CFG.output.cache_dir / "transcripts"
+    cache = CFG.output.shared_cache / "transcripts"     # shared by all profiles
     cache.mkdir(parents=True, exist_ok=True)
     tag = f"{CFG.engine_c.whisper_model_gpu}/{CFG.engine_c.whisper_model_cpu}"
     key = _file_key(video, start, end, tag)

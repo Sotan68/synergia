@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from synergia.brand import paper
 from synergia.brand.canvas import BODY, CENTRE, Box, safe_for
-from synergia.brand.elements import logo_mark
+from synergia.brand.elements import footer_name, logo
 from synergia.brand.typography import font
 from synergia.config import CFG, hex_to_rgb
 
@@ -29,7 +29,8 @@ TEXT = hex_to_rgb(K.text)
 MUTED = hex_to_rgb(K.muted)
 ACCENT = hex_to_rgb(K.accent)
 ACCENT2 = hex_to_rgb(K.accent2)
-LINE = TEXT + (36,)                   # hairlines
+LINE = TEXT + (36,)
+SURFACE_DARK = sum(BG) < 3 * 110          # a dark card (e.g. the Midnight theme)                   # hairlines
 
 # Font roles (keys of [fonts] in config.toml): one family, four weights.
 HEAVY, BOLD, SEMI, MED = "quiz_heavy", "quiz_bold", "quiz_semibold", "quiz_medium"
@@ -56,27 +57,11 @@ def _card(img: Image.Image) -> Image.Image:
     out = img.convert("RGBA")
     out.alpha_composite(Image.merge("RGBA", (*[Image.new("L", (w, h), v) for v in (10, 12, 50)],
                                              shadow)))
-    d = ImageDraw.Draw(out)
+    d = ImageDraw.Draw(out, "RGBA")
+    edge = TEXT + ((60,) if SURFACE_DARK else (255,))     # crisp navy edge; soft on dark cards
     d.rounded_rectangle([c.x, c.y, c.right, c.bottom], radius=46, fill=BG + (255,),
-                        outline=TEXT + (255,), width=2)          # crisp navy edge
+                        outline=edge, width=2)
     return out.convert("RGB")
-
-
-def _grid(seed: int, w: int, h: int, variant: int) -> Image.Image:
-    """Graph paper: the A / B paper texture with a fine blue grid, a bolder line every 5 cells."""
-    img = paper.background(seed, w, h, variant).convert("RGBA")
-    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    cell = 44
-    x0 = (w // 2) % cell                       # a line runs down the exact centre
-    for i, x in enumerate(range(x0 - cell * ((x0 // cell) + 1), w, cell)):
-        major = (x - w // 2) % (cell * 5) == 0
-        d.line([(x, 0), (x, h)], fill=ACCENT + (46 if major else 22,), width=2 if major else 1)
-    for y in range(0, h, cell):
-        major = (y // cell) % 5 == 0
-        d.line([(0, y), (w, y)], fill=ACCENT + (46 if major else 22,), width=2 if major else 1)
-    img.alpha_composite(layer)
-    return img.convert("RGB")
 
 
 def _cobalt(seed: int, w: int, h: int, variant: int) -> Image.Image:
@@ -90,11 +75,13 @@ def _cobalt(seed: int, w: int, h: int, variant: int) -> Image.Image:
 
 @lru_cache(maxsize=16)
 def _background(seed: int, w: int, h: int, variant: int) -> Image.Image:
-    if STYLE == "grid":
-        return _grid(seed, w, h, variant)
-    if STYLE == "cobalt":
+    if STYLE == "grid":                     # graph paper, no card
+        return paper.background(seed, w, h, variant, kind="grid")
+    if STYLE == "cobalt":                   # coloured background + card
         return _cobalt(seed, w, h, variant)
-    return _card(paper.background(seed, w, h, variant))
+    if STYLE == "plain":                    # the theme's background, no card
+        return paper.background(seed, w, h, variant)
+    return _card(paper.background(seed, w, h, variant))   # "sheet": card on the theme's background
 
 
 def background(seed: int, width: int | None = None, height: int | None = None,
@@ -121,15 +108,18 @@ def header(img: Image.Image, label: str, num: int | None = None, right: str | No
 def footer(img: Image.Image, page: int | None = None, total: int | None = None) -> None:
     """Logo mark + "Synergia" on the left, "02 / 06" on the right, under the card."""
     base = safe_for(img.height).bottom - 4
-    on_blue = STYLE == "cobalt"
-    col = (255, 255, 255) if on_blue else TEXT
-    soft = (214, 220, 255) if on_blue else MUTED
+    if STYLE == "cobalt":                   # under the card, on the blue
+        col, soft = (255, 255, 255), (214, 220, 255)
+    elif paper.DARK:                        # on a dark sheet
+        col, soft = paper.INK, paper.SOFT
+    else:
+        col, soft = TEXT, MUTED
     d = ImageDraw.Draw(img)
     f = font(SEMI, 30)
-    mark = logo_mark(30)
+    mark = logo(30)
     x = INNER.x
     img.paste(mark, (x, base - 11 - mark.height // 2), mark)
-    d.text((x + mark.width + 14, base), CFG.brand.name.capitalize(), font=f, fill=col, anchor="ls")
+    d.text((x + mark.width + 14, base), footer_name(), font=f, fill=col, anchor="ls")
     if page is not None:
         d.text((INNER.right, base), f"{page:02d} / {total:02d}", font=font(MED, 28), fill=soft,
                anchor="rs")

@@ -1,4 +1,7 @@
-"""Engine A — 10-Second Psychology Explainer: 4 PNG frames + ~11s 9:16 MP4 with letter-by-letter typing."""
+"""Engine A — 10-second explainer (hook + 3 steps): 4 PNG frames + ~11s 9:16 MP4 with letter-by-letter typing.
+
+The step labels, the slide-1 label and the title template come from [engine_a.wording] in the
+profile (e.g. "The mirror / The mechanism / The shift" for psychology)."""
 from __future__ import annotations
 
 import random
@@ -36,7 +39,8 @@ def validate(data: dict) -> list[str]:
     if not errors:
         normalize_common(data)
         if not data["title"]:
-            data["title"] = f"{strip_markup(data['concept'])}, explained in 10 seconds"
+            data["title"] = CFG.engine_a.wording.title_template.format(
+                concept=strip_markup(data["concept"]))
     return errors
 
 
@@ -48,14 +52,20 @@ def review_fields(_: dict) -> list[tuple[str, str]]:
 # ---------------------------------------------------------------- frame composition
 # The "paper" look (synergia.brand.paper): serif headlines, Inter Display text, blue serif italic
 # for **highlighted** words, a section header with a hairline rule, page count in the footer.
-STEP_NAMES = ["", "The mirror", "The mechanism", "The shift"]
+STEP_NAMES = ["", *CFG.engine_a.wording.step_labels]
+
+
+def _column(img: Image.Image) -> Box:
+    """The text column: the safe zone, or a column centred on screen for centred themes."""
+    safe = safe_for(img.height)
+    return Box(CENTRE.x, safe.y, CENTRE.w, safe.h) if paper.CENTRED else safe
 
 
 def _body_box(img: Image.Image) -> Box:
     """Area for the text block under the section header and above the footer."""
-    safe = safe_for(img.height)
-    top = safe.y + 150
-    return Box(safe.x, top, safe.w, safe.bottom - 110 - top)
+    col = _column(img)
+    top = col.y + 150
+    return Box(col.x, top, col.w, col.bottom - 110 - top)
 
 
 def _centred(top_area: int, bottom_area: int, height: int, lift: int = 30) -> int:
@@ -64,27 +74,29 @@ def _centred(top_area: int, bottom_area: int, height: int, lift: int = 30) -> in
 
 
 def build_steps(data: dict, seed: int) -> list[Step]:
+    from synergia.brand import layouts
+    if layouts.active():                    # the theme has its own blueprint
+        return layouts.build_a(data, seed, STEP_NAMES)
     steps: list[Step] = []
 
-    # 1 - Hook: concept in large serif, "Explained in 10 seconds", then the hook line.
+    # 1 - Hook: concept in large serif, the intro label ("Explained in 10 seconds"), the hook line.
     base = paper.background(seed, variant=0)
-    safe = safe_for(base.height)
+    safe = _column(base)
     concept = layout_text(data["concept"], Box(safe.x, 0, safe.w, 470), weight=paper.SERIF,
                           max_size=172, min_size=84, valign="top", line_spacing=0.98,
-                          color=paper.INK, accent_color=paper.ACCENT,
-                          accent_weight=paper.SERIF_I)
+                          align=paper.ALIGN, **paper.highlight("headline"))
     hook = layout_text(data["hook_line"], Box(safe.x, 0, safe.w, 300), weight=paper.STRONG_W,
                        max_size=70, min_size=48, valign="top", line_spacing=1.18,
-                       color=paper.INK, accent_color=paper.ACCENT, accent_weight=paper.SERIF_I,
-                       accent_scale=paper.SERIF_IN_SANS)
+                       align=paper.ALIGN, **paper.highlight("text"))
     gap_label, gap_hook = 76, 72
     total = concept.height + gap_label + gap_hook + hook.height
     top = _centred(safe.y, safe.bottom - 110, total)
     concept = concept.moved(dy=top)
     label_y = concept.top + concept.height + gap_label - 20
     hook = hook.moved(dy=concept.top + concept.height + gap_label + gap_hook - 10)
-    ImageDraw.Draw(base).text((safe.x, label_y), "Explained in 10 seconds",
-                              font=font(paper.TEXT_W, 36), fill=paper.ACCENT2, anchor="ls")
+    ImageDraw.Draw(base).text((base.width // 2 if paper.CENTRED else safe.x, label_y),
+                              CFG.engine_a.wording.intro_label, font=font(paper.TEXT_W, 36),
+                              fill=paper.ACCENT2, anchor="ms" if paper.CENTRED else "ls")
     paper.footer(base, 1, 4)
     steps.append(Step(base, [concept, hook]))
 
@@ -96,7 +108,7 @@ def build_steps(data: dict, seed: int) -> list[Step]:
         box = _body_box(base)
         lay = layout_text(data[key], Box(box.x, 0, box.w, box.h - 60), weight=paper.PARA_W,
                           max_size=84, min_size=44, valign="top", line_spacing=1.24,
-                          color=paper.INK, accent_color=paper.ACCENT)
+                          align=paper.ALIGN, **paper.highlight("paragraph"))
         lay = lay.moved(dy=_centred(box.y, box.bottom, lay.height))
         paper.footer(base, idx + 1, 4)
         steps.append(Step(base, [lay]))
@@ -106,8 +118,8 @@ def build_steps(data: dict, seed: int) -> list[Step]:
     safe = safe_for(base.height)
     col = Box(CENTRE.x, 0, CENTRE.w, 760)
     lay = layout_text(data["shift"], col, weight=paper.SERIF, max_size=112, min_size=60,
-                      align="center", valign="top", line_spacing=1.04, color=paper.INK,
-                      accent_color=paper.ACCENT, accent_weight=paper.SERIF_I)
+                      align="center", valign="top", line_spacing=1.04,
+                      **paper.highlight("headline"))
     lay = lay.moved(dy=_centred(safe.y, safe.bottom - 110, lay.height))
     paper.footer(base, align="center")
     steps.append(Step(base, [lay]))

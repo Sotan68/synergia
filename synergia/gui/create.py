@@ -5,10 +5,11 @@ from nicegui import ui
 
 from synergia import demo
 from synergia.brand.typography import strip_markup
+from synergia.config import CFG
+from synergia.output import ENABLED, ENGINE_NAMES
 from synergia.gui.components import S, busy, claude_step, run_preview, script_editor, section
 
-ENGINES = [("A", "Psychology Explainer"), ("B", "Random Fact Slideshow"), ("C", "Podcast Clipper"),
-           ("D", "Brain Test"), ("E", "Which One Are You")]
+ENGINES = [(k, ENGINE_NAMES[k]) for k in ENABLED]      # from the profile
 
 
 def _heading(text: str, sub: str = "") -> None:
@@ -75,14 +76,14 @@ def _seed_flow(area, letter: str, engine, label: str, example: str, demo_data: d
 
 def engine_a(area) -> None:
     from synergia.engines import psychology
-    _seed_flow(area, "A", psychology, "Concept", "The Spotlight Effect", demo.PSYCHOLOGY, "concept",
-               "Psychology Explainer")
+    _seed_flow(area, "A", psychology, "Concept", CFG.voice.examples.concept, demo.PSYCHOLOGY,
+               "concept", ENGINE_NAMES["A"])
 
 
 def engine_b(area) -> None:
     from synergia.engines import listicle
-    _seed_flow(area, "B", listicle, "Hook", "5 things people regret not doing after 25", demo.LISTICLE,
-               "cover_title", "Slideshow")
+    _seed_flow(area, "B", listicle, "Hook", CFG.voice.examples.hook, demo.LISTICLE,
+               "cover_title", ENGINE_NAMES["B"])
 
 
 # ---------------------------------------------------------------- D
@@ -90,7 +91,7 @@ def engine_b(area) -> None:
 def engine_d(area) -> None:
     def start() -> None:
         with section(area):
-            _heading("Engine D · Brain Test",
+            _heading(f"Engine D · {ENGINE_NAMES['D']}",
                      "3-4 random mini-game rounds, each harder than the last. No Claude needed.")
 
             async def go() -> None:
@@ -110,16 +111,16 @@ def engine_e(area) -> None:
 
     def start() -> None:
         with section(area):
-            _heading("Engine E · Which One Are You")
+            _heading(f"Engine E · {ENGINE_NAMES['E']}")
             mode = ui.toggle({"checklist": "How many apply to you?", "pick": "Pick one → reveal"},
                              value="checklist")
             topic = ui.input("Topic").classes("w-full max-w-xl").props("outlined")
             suggestions = ui.column().classes("w-full")
 
             def update_hint() -> None:
-                topic.props["placeholder"] = ("signs you're a high-functioning overthinker"
-                                              if mode.value == "checklist"
-                                              else "pick a door to reveal your hidden strength")
+                ex = CFG.voice.examples
+                topic.props["placeholder"] = (ex.checklist_topic if mode.value == "checklist"
+                                              else ex.pick_topic)
                 topic.update()
             mode.on_value_change(update_hint)
             update_hint()
@@ -330,8 +331,8 @@ def engine_c(area) -> None:
 FLOWS = {"A": engine_a, "B": engine_b, "C": engine_c, "D": engine_d, "E": engine_e}
 
 
-def page(engine: str = "A") -> None:
-    engine = engine.upper() if engine.upper() in FLOWS else "A"
+def page(engine: str = "") -> None:
+    engine = engine.upper() if engine.upper() in ENABLED else ENABLED[0]
     with ui.tabs(value=engine).classes("w-full") as tabs:
         for letter, name in ENGINES:
             ui.tab(letter, label=f"{letter} · {name}").props("no-caps")

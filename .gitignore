@@ -18,3 +18,4 @@ desktop.ini
 
 # Credentials (YouTube OAuth client + tokens)
 secrets/
+profiles/

@@ -136,11 +136,6 @@ HOOK_PATTERNS = [
     r"\bwhy do\b", r"\bhow do\b", r"\bif you\b", r"\byou need\b", r"\byou have to\b",
     r"\bthe moment\b", r"\bi learned\b", r"\bchanged my life\b", r"\bstop\b",
 ]
-TOPIC_WORDS = [
-    "brain", "psycholog", "fear", "anxiety", "love", "relationship", "happiness", "happy", "success",
-    "fail", "confidence", "habit", "discipline", "money", "purpose", "meaning", "lonely", "trauma",
-    "dopamine", "emotion", "ego", "identity", "therapy", "parents", "childhood", "death", "life",
-]
 
 
 def _score_window(sents: list[Sentence], words: list[dict]) -> float:
@@ -151,7 +146,7 @@ def _score_window(sents: list[Sentence], words: list[dict]) -> float:
     score += 2.0 * sum(bool(re.search(p, first)) for p in HOOK_PATTERNS)
     score += 1.5 if first.rstrip().endswith("?") else 0
     score += 0.4 * sum(bool(re.search(p, full)) for p in HOOK_PATTERNS)
-    score += 0.35 * sum(full.count(t) for t in TOPIC_WORDS)
+    score += 0.35 * sum(full.count(t) for t in CFG.engine_c.keywords)   # the niche's words
     score += 0.6 * len(re.findall(r"\b\d+\b", full))
     you = len(re.findall(r"\byou\b|\byour\b", full))
     score += 0.15 * you

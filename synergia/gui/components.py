@@ -136,7 +136,7 @@ def claude_step(prompt: str, validator: Validator, title: str,
             await call(on_done, data)
             return
         with box:
-            with ui.card().classes("w-full bg-orange-10 border border-orange-8"):
+            with ui.card().classes("w-full bg-orange-1 border border-orange-3"):
                 ui.label(str(err)).classes("text-sm")
                 ui.label("Falling back to copy and paste.").classes("text-xs opacity-60")
             _manual_step(err.last_prompt or prompt, **manual)
@@ -186,8 +186,8 @@ def _manual_step(prompt: str, validator: Validator, title: str,
             if data is not None:
                 await call(on_done, data)
                 return
-            with errors_box, ui.card().classes("w-full bg-red-10 border border-red-8"):
-                ui.label("Reply needs a fix").classes("font-semibold text-red-4")
+            with errors_box, ui.card().classes("w-full bg-red-1 border border-red-3"):
+                ui.label("Reply needs a fix").classes("font-semibold text-red-8")
                 for e in errors:
                     ui.label(f"• {e}").classes("text-sm")
                 ui.label("A correction prompt has been copied. Send it in the same Claude chat, "
