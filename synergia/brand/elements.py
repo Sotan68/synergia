@@ -20,9 +20,11 @@ def footer_name() -> str:
 
 
 @lru_cache(maxsize=8)
-def logo(height: int) -> Image.Image:
-    """The brand logo for footers: the user's PNG ([brand] logo) scaled to `height`, or the drawn
-    Overlap mark in the theme's colours."""
+def logo(height: int) -> Image.Image | None:
+    """The brand logo for footers: the profile's PNG ([brand] logo) scaled to `height`, or None.
+
+    The drawn Overlap mark is the SYNERGIA brand's own logo, so it only appears for a profile that
+    asks for it with [brand] mark = "overlap"; everyone else gets just their name."""
     path = CFG.brand.logo
     if path and path.is_file():
         im = Image.open(path).convert("RGBA")
@@ -31,7 +33,9 @@ def logo(height: int) -> Image.Image:
             im = im.crop(bbox)
         w = max(1, round(im.width * height / im.height))
         return im.resize((w, height), Image.LANCZOS)
-    return logo_mark(height)
+    if getattr(CFG.brand, "mark", "") == "overlap":
+        return logo_mark(height)
+    return None
 
 
 @lru_cache(maxsize=8)

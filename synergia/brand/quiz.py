@@ -118,8 +118,9 @@ def footer(img: Image.Image, page: int | None = None, total: int | None = None) 
     f = font(SEMI, 30)
     mark = logo(30)
     x = INNER.x
-    img.paste(mark, (x, base - 11 - mark.height // 2), mark)
-    d.text((x + mark.width + 14, base), footer_name(), font=f, fill=col, anchor="ls")
+    if mark:
+        img.paste(mark, (x, base - 11 - mark.height // 2), mark)
+    d.text((x + (mark.width + 14 if mark else 0), base), footer_name(), font=f, fill=col, anchor="ls")
     if page is not None:
         d.text((INNER.right, base), f"{page:02d} / {total:02d}", font=font(MED, 28), fill=soft,
                anchor="rs")

@@ -38,6 +38,9 @@ The first time you run Synergia it asks about your brand before anything else (`
    | **Midnight** | dark navy | left | gold | Fraunces, DM Sans |
    | **Sunset** | cream-to-peach | centred | coral italic | DM Serif Display, DM Sans |
    | **Minimal** | pure white | left | red underline | Inter |
+   | **Gazette** | newsprint front page | masthead + columns | red | Playfair Display, Libre Franklin |
+   | **Terminal** | code window on a dark screen | commands + comments | amber | JetBrains Mono |
+   | **Pop** | bright yellow, halftone dots | stickers + hard-shadow cards | pink highlighter | Rubik |
 5. **Engines**: tick the formats you want; the others disappear from the menus and from Autopilot.
 
 ### Profiles

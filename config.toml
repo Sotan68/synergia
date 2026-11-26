@@ -27,7 +27,8 @@ black = "assets/fonts/Inter-Black.ttf"
 # the theme. A variable font takes its axes after "|", e.g. "assets/fonts/X.ttf|Weight=500".
 line_spacing = 1.2
 
-# The look: synergia, notebook, cobalt, midnight, sunset or minimal (synergia/brand/themes.py).
+# The look: synergia, notebook, cobalt, midnight, sunset, minimal, gazette, terminal or pop
+# (synergia/brand/themes.py).
 # A theme sets the fonts and colours plus:
 #   [paper]  Engine A / B colours (background, background2, ink, soft, accent, accent2) and
 #            texture (grain, mottle, tint)

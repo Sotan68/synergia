@@ -467,8 +467,289 @@ class Swiss:
         return img, self.bottom([(title, 40), (body, 0)])
 
 
+# ================================================================ gazette
+class Gazette:
+    """A newspaper front page: masthead with the brand name over double rules, a dateline,
+    heavy serif headlines, red kickers, column rules and a giant red quotation mark."""
+
+    def masthead(self, img, page: int, pages: int) -> int:
+        """Draw the masthead; returns the y where the page content starts."""
+        from synergia.brand.elements import footer_name, logo
+        d = ImageDraw.Draw(img)
+        name, size = footer_name(), 84
+        while size > 40 and font(P.SERIF, size).getlength(name) > SAFE.w - 90:
+            size -= 4
+        f = font(P.SERIF, size)
+        mark = logo(48)
+        mw = mark.width + 18 if mark else 0
+        x = round(W / 2 - (mw + f.getlength(name)) / 2)
+        base = SAFE.y + 76
+        if mark:
+            img.paste(mark, (x, base - 18 - mark.height // 2), mark)
+        d.text((x + mw, base), name, font=f, fill=P.INK, anchor="ls")
+        y = base + 26
+        d.rectangle([SAFE.x, y, SAFE.right, y + 5], fill=P.INK)
+        d.line([(SAFE.x, y + 13), (SAFE.right, y + 13)], fill=P.INK, width=2)
+        small = font(P.TEXT_W, 28)
+        d.text((SAFE.x, y + 52), f"No. {page:02d}", font=small, fill=P.SOFT, anchor="ls")
+        d.text((W // 2, y + 52), "Explained in plain words", font=small, fill=P.SOFT, anchor="ms")
+        d.text((SAFE.right, y + 52), f"Page {page} of {pages}", font=small, fill=P.SOFT, anchor="rs")
+        d.line([(SAFE.x, y + 70), (SAFE.right, y + 70)], fill=P.INK, width=2)
+        return y + 70
+
+    def column(self, img, lays: list[TextLayout], x: int) -> None:
+        """A thin column rule beside a block of text."""
+        top = min(l.top for l in lays)
+        bot = max(l.top + l.height for l in lays)
+        ImageDraw.Draw(img).line([(x, top + 6), (x, bot)], fill=P.INK, width=2)
+
+    def a_hook(self, img, data):
+        top = self.masthead(img, 1, 4)
+        head = text(data["concept"], SAFE.x, SAFE.w, P.SERIF, 156, 76, "headline", align="center",
+                    ls=1.0, maxh=560)
+        deck = text(data["hook_line"], SAFE.x + 40, SAFE.w - 80, P.TEXT_W, 56, 40, align="center",
+                    ls=1.24, maxh=260)
+        lays = stack([(head, 90), (deck, 0)], top + 170 + max(0, (FOOT - top - 170 - total([(head, 90), (deck, 0)])) // 2))
+        label(img, CFG.engine_a.wording.intro_label, (W // 2, lays[0].top - 50), 34, P.ACCENT,
+              anchor="ms")
+        rule_y = lays[0].top + lays[0].height + 44
+        ImageDraw.Draw(img).line([(W // 2 - 70, rule_y), (W // 2 + 70, rule_y)], fill=P.INK, width=3)
+        return img, lays
+
+    def a_para(self, img, num, name, body):
+        top = self.masthead(img, num, 4)
+        label(img, f"{num:02d}  ·  {name}", (SAFE.x, top + 100), 36, P.ACCENT)
+        para = put(text(body, SAFE.x + 44, SAFE.w - 44, P.PARA_W, 60, 42, "paragraph", ls=1.3,
+                        maxh=FOOT - top - 180), top + 150)
+        self.column(img, [para], SAFE.x + 6)
+        return img, [para]
+
+    def a_shift(self, img, body):
+        top = self.masthead(img, 4, 4)
+        ImageDraw.Draw(img).text((SAFE.x - 10, top + 330), "“", font=font(P.SERIF, 360),
+                                 fill=P.ACCENT, anchor="ls")
+        lay = put(text(body, SAFE.x, SAFE.w, P.SERIF_I, 100, 58, "headline", ls=1.08, maxh=760),
+                  top + 360)
+        return img, [lay]
+
+    def b_cover(self, img, data, swipe):
+        top = self.masthead(img, 1, 6)
+        items = [(text(data["cover_title"], SAFE.x, SAFE.w, P.SERIF, 160, 76, "headline",
+                       align="center", ls=1.0, maxh=700), 60)]
+        if data.get("cover_subtitle"):
+            items.append((text(data["cover_subtitle"], SAFE.x + 40, SAFE.w - 80, P.TEXT_W, 52, 38,
+                               align="center", color=P.SOFT), 0))
+        lays = stack(items, top + 120 + max(0, (FOOT - top - 120 - total(items)) // 2))
+        if swipe:   # on the footer line, with a drawn arrow if the font has no "→"
+            y = SAFE.bottom - 14
+            f = font(P.STRONG_W, 32)
+            d = ImageDraw.Draw(img)
+            aw = 32 * 0.9
+            d.text((SAFE.right - aw - 16, y), "Continued on the next page", font=f, fill=P.ACCENT,
+                   anchor="rs")
+            P.arrow(d, SAFE.right - aw, y - 11, 32, P.ACCENT)
+        return img, lays
+
+    def b_point(self, img, i, p, page, pages):
+        top = self.masthead(img, page, pages)
+        label(img, f"No. {i}", (SAFE.x, top + 100), 38, P.ACCENT)
+        title = text(p["title"], SAFE.x, SAFE.w, P.SERIF, 110, 60, "headline", ls=1.02, maxh=420)
+        body = text(p["body"], SAFE.x + 44, SAFE.w - 44, P.TEXT_W, 52, 36, color=P.SOFT, ls=1.36,
+                    maxh=360)
+        lays = stack([(title, 60), (body, 0)], top + 150)
+        self.column(img, [lays[1]], SAFE.x + 6)
+        return img, lays
+
+
+# ================================================================ terminal
+class Terminal:
+    """A code window: title bar with three dots, everything in a monospace font, commands like
+    `$ explain`, comments for labels and a waiting `$ █` prompt at the end."""
+    WIN = Box(70, 214, W - 140, SAFE.bottom - 214 + 20)
+    X, WCOL = 124, SAFE.right - 124
+
+    def window(self, img, title: str) -> None:
+        from synergia.brand.elements import footer_name
+        d = ImageDraw.Draw(img, "RGBA")
+        b = self.WIN
+        d.rounded_rectangle([b.x, b.y, b.right, b.bottom], 26, fill=_c("window", "#0F1512") + (255,),
+                            outline=_c("window_edge", "#26352B") + (255,), width=3)
+        d.rounded_rectangle([b.x, b.y, b.right, b.y + 74], 26, fill=_c("window_bar", "#18221C") + (255,))
+        d.rectangle([b.x, b.y + 50, b.right, b.y + 74], fill=_c("window_bar", "#18221C") + (255,))
+        for k, col in enumerate(((255, 95, 87), (254, 188, 46), (40, 200, 64))):
+            cx = b.x + 44 + k * 38
+            d.ellipse([cx - 12, b.y + 25, cx + 12, b.y + 49], fill=col + (255,))
+        d.text((W // 2, b.y + 47), f"{footer_name().lower()} — {title}", font=font(P.TEXT_W, 28),
+               fill=P.SOFT, anchor="ms")
+
+    def say(self, img, s: str, y: int, color=None, size: int = 38) -> None:
+        ImageDraw.Draw(img).text((self.X, y), s, font=font(P.TEXT_W, size), fill=tuple(color or P.SOFT),
+                                 anchor="ls")
+
+    def prompt_after(self, img, lay: TextLayout, gap: int = 90) -> None:
+        y = lay.top + lay.height + gap
+        self.say(img, "$ █", y, P.INK, 44)
+
+    def a_hook(self, img, data):
+        self.window(img, "explain")
+        top = self.WIN.y + 190
+        self.say(img, "$ explain --in 10s", top)
+        concept = put(text(data["concept"], self.X, self.WCOL, P.SERIF, 104, 56, "headline", ls=1.08,
+                           maxh=520), top + 60)
+        c_end = concept.top + concept.height
+        self.say(img, f"# {CFG.engine_a.wording.intro_label.lower()}", c_end + 80, P.ACCENT)
+        hook = put(text(data["hook_line"], self.X, self.WCOL, P.TEXT_W, 54, 38, ls=1.32, maxh=300),
+                   c_end + 130)
+        self.prompt_after(img, hook)
+        P.footer(img, 1, 4)
+        return img, [concept, hook]
+
+    def a_para(self, img, num, name, body):
+        slug = "_".join(name.lower().split())
+        self.window(img, f"{num:02d}_{slug}.txt")
+        top = self.WIN.y + 190
+        self.say(img, f"// {num:02d} {name.lower()}", top, P.ACCENT, 40)
+        para = put(text(body, self.X, self.WCOL, P.PARA_W, 54, 38, "paragraph", ls=1.42,
+                        maxh=FOOT - top - 200), top + 70)
+        self.prompt_after(img, para, 80)
+        P.footer(img, num, 4)
+        return img, [para]
+
+    def a_shift(self, img, body):
+        self.window(img, "takeaway")
+        top = self.WIN.y + 190
+        self.say(img, "$ echo", top)
+        lay = put(text(body, self.X, self.WCOL, P.SERIF, 86, 52, "headline", ls=1.16, maxh=760),
+                  top + 70)
+        self.prompt_after(img, lay)
+        P.footer(img, 4, 4)
+        return img, [lay]
+
+    def b_cover(self, img, data, swipe):
+        self.window(img, "list.txt")
+        top = self.WIN.y + 190
+        self.say(img, "$ cat list.txt | head -5", top)
+        title = put(text(data["cover_title"], self.X, self.WCOL, P.SERIF, 112, 60, "headline",
+                         ls=1.08, maxh=640), top + 70)
+        lays = [title]
+        if data.get("cover_subtitle"):
+            sub = put(text("# " + data["cover_subtitle"], self.X, self.WCOL, P.TEXT_W, 46, 34,
+                           color=P.ACCENT), title.top + title.height + 60)
+            lays.append(sub)
+        self.prompt_after(img, lays[-1])
+        P.footer(img)
+        if swipe:
+            P.swipe_pill(img)
+        return img, lays
+
+    def b_point(self, img, i, p, page, pages):
+        self.window(img, f"tip_{i:02d}.md")
+        top = self.WIN.y + 200
+        ImageDraw.Draw(img).text((self.X, top + 60), f"[{i:02d}]", font=font(P.NUM_W, 120),
+                                 fill=P.ACCENT, anchor="ls")
+        title = text(p["title"], self.X, self.WCOL, P.SERIF, 84, 52, "headline", ls=1.12, maxh=380)
+        body = text(p["body"], self.X, self.WCOL, P.TEXT_W, 48, 34, color=P.SOFT, ls=1.38, maxh=340)
+        lays = stack([(title, 44), (body, 0)], top + 130)
+        self.prompt_after(img, lays[-1], 80)
+        P.footer(img, page, pages)
+        return img, lays
+
+
+# ================================================================ pop
+class Pop:
+    """Neo-brutalist stickers: thick black outlines, hard offset shadows, rotated stickers and a
+    speech bubble on a bright, halftone-dotted background."""
+    BORDER, SHADOW = 6, 14
+
+    def slab(self, img, box: Box, fill=(255, 255, 255), radius: int = 30) -> None:
+        d = ImageDraw.Draw(img)
+        s = self.SHADOW
+        d.rounded_rectangle([box.x + s, box.y + s, box.right + s, box.bottom + s], radius, fill=P.INK)
+        d.rounded_rectangle([box.x, box.y, box.right, box.bottom], radius, fill=tuple(fill),
+                            outline=P.INK, width=self.BORDER)
+
+    def sticker(self, img, s: str, cx: int, cy: int, bg, fg, angle: float = -4, size: int = 40) -> None:
+        f = font(P.STRONG_W, size)
+        w, h = int(f.getlength(s)) + 70, int(size * 1.9)
+        tile = Image.new("RGBA", (w + 24, h + 24), (0, 0, 0, 0))
+        d = ImageDraw.Draw(tile)
+        d.rounded_rectangle([10, 10, w + 10, h + 10], h // 2, fill=P.INK + (255,))
+        d.rounded_rectangle([2, 2, w + 2, h + 2], h // 2, fill=tuple(bg) + (255,), outline=P.INK + (255,),
+                            width=5)
+        d.text((w / 2 + 2, h / 2 + 4), s, font=f, fill=tuple(fg) + (255,), anchor="mm")
+        tile = tile.rotate(angle, resample=Image.BICUBIC, expand=True)
+        img.paste(tile, (cx - tile.width // 2, cy - tile.height // 2), tile)
+
+    def in_slab(self, img, items, x: int, w: int, top: int | None = None, pad: int = 60,
+                fill=(255, 255, 255)) -> list[TextLayout]:
+        h = total(items) + 2 * pad
+        if top is None:
+            top = SAFE.y + 60 + max(0, (FOOT - SAFE.y - 60 - h) // 2)
+        self.slab(img, Box(x, top, w, h), fill)
+        return stack(items, top + pad)
+
+    def a_hook(self, img, data):
+        inner_x, inner_w = SAFE.x + 50, SAFE.w - 100
+        head = text(data["concept"], inner_x, inner_w, P.SERIF, 132, 70, "headline", ls=1.0, maxh=560)
+        hook = text(data["hook_line"], SAFE.x, SAFE.w, P.STRONG_W, 60, 42, ls=1.2, maxh=260)
+        block = head.height + 120 + 90 + hook.height
+        top = SAFE.y + 120 + max(0, (FOOT - SAFE.y - 120 - block) // 2)
+        lays = self.in_slab(img, [(head, 0)], SAFE.x, SAFE.w, top)
+        self.sticker(img, CFG.engine_a.wording.intro_label, SAFE.x + 230, top - 10, P.ACCENT2,
+                     (255, 255, 255), -5, 36)
+        hook = put(hook, lays[0].top + lays[0].height + 60 + 90)
+        P.footer(img, 1, 4)
+        return img, [*lays, hook]
+
+    def a_para(self, img, num, name, body):
+        para = text(body, SAFE.x + 50, SAFE.w - 100, P.PARA_W, 58, 40, "paragraph", ls=1.3, maxh=820)
+        lays = self.in_slab(img, [(para, 0)], SAFE.x, SAFE.w)
+        self.sticker(img, f"{num:02d} · {name}", SAFE.x + 200, lays[0].top - 66, P.INK,
+                     _c("marker", "#FF4FA3"), 3, 36)
+        P.footer(img, num, 4)
+        return img, lays
+
+    def a_shift(self, img, body):
+        lay = text(body, SAFE.x + 60, SAFE.w - 120, P.SERIF, 96, 56, "headline", align="center",
+                   ls=1.06, maxh=760)
+        lays = self.in_slab(img, [(lay, 0)], SAFE.x, SAFE.w, pad=70)
+        bot = lays[0].top + lays[0].height + 70
+        d = ImageDraw.Draw(img)                       # the speech-bubble tail
+        tail = [(SAFE.x + 120, bot - 4), (SAFE.x + 220, bot - 4), (SAFE.x + 100, bot + 110)]
+        d.polygon([(x + self.SHADOW, y + self.SHADOW) for x, y in tail], fill=P.INK)
+        d.polygon(tail, fill=(255, 255, 255))
+        d.line([tail[1], tail[2], tail[0]], fill=P.INK, width=self.BORDER)
+        P.footer(img, 4, 4)
+        return img, lays
+
+    def b_cover(self, img, data, swipe):
+        title = put(text(data["cover_title"], SAFE.x, SAFE.w, P.SERIF, 158, 76, "headline", ls=0.98,
+                         maxh=820), SAFE.y + 130)
+        lays = [title]
+        if data.get("cover_subtitle"):
+            self.sticker(img, data["cover_subtitle"].replace("**", ""), W // 2 - 40,
+                         title.top + title.height + 110, _c("marker", "#FF4FA3"), P.INK, -3, 40)
+        P.footer(img)
+        if swipe:
+            P.swipe_pill(img)
+        return img, lays
+
+    def b_point(self, img, i, p, page, pages):
+        title = text(p["title"], SAFE.x + 50, SAFE.w - 100, P.SERIF, 92, 54, "headline", ls=1.04, maxh=380)
+        body = text(p["body"], SAFE.x + 50, SAFE.w - 100, P.TEXT_W, 50, 34, color=P.SOFT, ls=1.32, maxh=340)
+        lays = self.in_slab(img, [(title, 36), (body, 0)], SAFE.x, SAFE.w, pad=70)
+        cx, cy, r = SAFE.x + 110, lays[0].top - 90, 82
+        d = ImageDraw.Draw(img)
+        d.ellipse([cx - r + self.SHADOW, cy - r + self.SHADOW, cx + r + self.SHADOW, cy + r + self.SHADOW],
+                  fill=P.INK)
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=P.ACCENT2, outline=P.INK, width=self.BORDER)
+        d.text((cx, cy + 6), str(i), font=font(P.NUM_W, 104), fill=(255, 255, 255), anchor="mm")
+        P.footer(img, page, pages)
+        return img, lays
+
+
 BLUEPRINTS = {"notebook": Notebook, "poster": Poster, "cinematic": Cinematic, "cards": Cards,
-              "swiss": Swiss}
+              "swiss": Swiss, "gazette": Gazette, "terminal": Terminal, "pop": Pop}
 
 
 def active():

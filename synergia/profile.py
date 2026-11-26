@@ -66,7 +66,7 @@ def load(path: Path | None = None) -> dict:
 def synergia_profile() -> dict:
     """Today's SYNERGIA psychology brand, so existing installs keep the same prompts and look."""
     return {
-        "brand": {"name": "SYNERGIA"},
+        "brand": {"name": "SYNERGIA", "mark": "overlap"},     # the SYNERGIA logo mark
         "theme": {"preset": "synergia"},
         "voice": {
             "niche": "human psychology, life advice and real experiences",

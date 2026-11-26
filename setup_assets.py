@@ -16,7 +16,8 @@ INTER_ZIP = "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip"
 WANTED = ["Inter-Bold.ttf", "Inter-SemiBold.ttf", "Inter-Medium.ttf", "Inter-Black.ttf",
           "InterDisplay-Medium.ttf", "InterDisplay-SemiBold.ttf", "InterDisplay-Bold.ttf"]
 # Theme fonts from the Google Fonts repo (all OFL): Instrument Serif, Newsreader, Bricolage
-# Grotesque, Space Grotesk, Fraunces, DM Sans and DM Serif Display.
+# Grotesque, Space Grotesk, Fraunces, DM Sans, DM Serif Display, Playfair Display, Libre Franklin,
+# JetBrains Mono and Rubik.
 GF = "https://github.com/google/fonts/raw/main/ofl/"
 SERIF = {"InstrumentSerif-Regular.ttf": "instrumentserif/InstrumentSerif-Regular.ttf",
          "InstrumentSerif-Italic.ttf": "instrumentserif/InstrumentSerif-Italic.ttf",
@@ -34,7 +35,16 @@ SERIF = {"InstrumentSerif-Regular.ttf": "instrumentserif/InstrumentSerif-Regular
          "dmsans-OFL.txt": "dmsans/OFL.txt",
          "DMSerifDisplay-Regular.ttf": "dmserifdisplay/DMSerifDisplay-Regular.ttf",
          "DMSerifDisplay-Italic.ttf": "dmserifdisplay/DMSerifDisplay-Italic.ttf",
-         "dmserifdisplay-OFL.txt": "dmserifdisplay/OFL.txt"}
+         "dmserifdisplay-OFL.txt": "dmserifdisplay/OFL.txt",
+         "PlayfairDisplay.ttf": "playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf",
+         "PlayfairDisplay-Italic.ttf": "playfairdisplay/PlayfairDisplay-Italic%5Bwght%5D.ttf",
+         "playfairdisplay-OFL.txt": "playfairdisplay/OFL.txt",
+         "LibreFranklin.ttf": "librefranklin/LibreFranklin%5Bwght%5D.ttf",
+         "librefranklin-OFL.txt": "librefranklin/OFL.txt",
+         "JetBrainsMono.ttf": "jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf",
+         "jetbrainsmono-OFL.txt": "jetbrainsmono/OFL.txt",
+         "Rubik.ttf": "rubik/Rubik%5Bwght%5D.ttf",
+         "rubik-OFL.txt": "rubik/OFL.txt"}
 YUNET_URLS = [
     "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
     "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",

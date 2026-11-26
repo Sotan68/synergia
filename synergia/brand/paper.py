@@ -126,6 +126,30 @@ def _background(seed: int, w: int, h: int, variant: int, kind: str = "paper") ->
         return _plain(seed, w, h, variant, kind == "gradient")
     if kind == "notebook":
         return notebook_lines(_background(seed, w, h, variant, "paper"))
+    if kind == "scanlines":                     # a CRT screen: faint horizontal lines
+        out = _plain(seed, w, h, variant, False).convert("RGBA")
+        layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(layer)
+        for y in range(0, h, 4):
+            d.line([(0, y), (w, y)], fill=(0, 0, 0, 70), width=1)
+        out.alpha_composite(layer)
+        return out.convert("RGB")
+    if kind == "halftone":                      # comic-print dots fading in from two corners
+        out = _plain(seed, w, h, variant, False).convert("RGBA")
+        layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(layer)
+        step = 34
+        corner = (w, 0) if variant % 2 == 0 else (0, 0)
+        for y in range(0, h, step):
+            for x in range(0, w, step):
+                for cx, cy in (corner, (w - corner[0], h)):
+                    dist = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5 / 700
+                    r = max(0.0, 9 * (1 - dist))
+                    if r > 0.6:
+                        ox = step / 2 if (y // step) % 2 else 0
+                        d.ellipse([x + ox - r, y - r, x + ox + r, y + r], fill=ACCENT2 + (90,))
+        out.alpha_composite(layer)
+        return out.convert("RGB")
     if kind == "grid":
         return grid_lines(_background(seed, w, h, variant, "paper"), ACCENT)
     rng = np.random.default_rng(seed * 7919 + variant)
@@ -189,10 +213,12 @@ def footer(img: Image.Image, page: int | None = None, total: int | None = None,
     f = font(STRONG_W, FOOT_SIZE)
     mark = logo(30)
     name = footer_name()
-    total_w = mark.width + 14 + f.getlength(name)
+    mw = mark.width + 14 if mark else 0        # no logo: just the name
+    total_w = mw + f.getlength(name)
     x = box.x if align == "left" else round(img.width / 2 - total_w / 2)
-    img.paste(mark, (x, base - 11 - mark.height // 2), mark)
-    d.text((x + mark.width + 14, base), name, font=f, fill=ink, anchor="ls")
+    if mark:
+        img.paste(mark, (x, base - 11 - mark.height // 2), mark)
+    d.text((x + mw, base), name, font=f, fill=ink, anchor="ls")
     if page is not None and align == "left" and show_page:
         d.text((box.right, base), f"{page:02d} / {total:02d}", font=font(TEXT_W, 28), fill=soft,
                anchor="rs")
@@ -225,13 +251,38 @@ def section_header(img: Image.Image, num: int, label: str, y: int | None = None,
     return rule
 
 
+def has_glyph(f, ch: str) -> bool:
+    """True if the font really has `ch` (not the empty box it draws for missing characters)."""
+    missing = f.getmask("\U0010FFFD")
+    got = f.getmask(ch)
+    return got.size != missing.size or bytes(got) != bytes(missing)
+
+
+def arrow(draw: ImageDraw.ImageDraw, x: float, y: float, size: int, fill) -> float:
+    """A drawn → for fonts without the character; (x, y) = left end on the baseline-ish middle.
+    Returns its width."""
+    w = size * 0.9
+    t = max(2, round(size * 0.09))
+    draw.line([(x, y), (x + w, y)], fill=fill, width=t)
+    draw.line([(x + w - size * 0.32, y - size * 0.3), (x + w, y)], fill=fill, width=t)
+    draw.line([(x + w - size * 0.32, y + size * 0.3), (x + w, y)], fill=fill, width=t)
+    return w
+
+
 def swipe_pill(img: Image.Image) -> None:
     """Navy 'Swipe →' pill on the right of the footer row (carousel covers)."""
     box = safe_for(img.height)
     base = footer_baseline(img)
     f = font(STRONG_W, 30)
-    txt = "Swipe  →"
-    w = f.getlength(txt)
     d = ImageDraw.Draw(img)
+    if has_glyph(f, "→"):
+        txt = "Swipe  →"
+        w = f.getlength(txt)
+        d.rounded_rectangle([box.right - w - 48, base - 42, box.right, base + 16], radius=29, fill=INK)
+        d.text((box.right - w - 24, base - 2), txt, font=f, fill=PAPER, anchor="ls")
+        return
+    txt = "Swipe"
+    w = f.getlength(txt) + 16 + 30 * 0.9
     d.rounded_rectangle([box.right - w - 48, base - 42, box.right, base + 16], radius=29, fill=INK)
     d.text((box.right - w - 24, base - 2), txt, font=f, fill=PAPER, anchor="ls")
+    arrow(d, box.right - 24 - 30 * 0.9, base - 12, 30, PAPER)

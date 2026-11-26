@@ -67,12 +67,15 @@ def _switch(folder: str) -> None:
 
 
 def _logo_src() -> str | None:
-    """The profile's logo (or the drawn mark) as a small PNG for the header."""
+    """The profile's logo as a small PNG for the header (None if the profile has no logo)."""
     from synergia.brand.elements import logo
     path = CFG.output.shared_cache / "ui" / f"logo-{CFG.profile_name}.png"
     try:
+        mark = logo(56)
+        if mark is None:
+            return None
         path.parent.mkdir(parents=True, exist_ok=True)
-        logo(56).save(path)
+        mark.save(path)
         return str(path)
     except Exception:  # noqa: BLE001 — a header without a logo is fine
         return None

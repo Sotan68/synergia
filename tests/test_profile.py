@@ -149,7 +149,8 @@ def test_from_draft_drives_prompts(tmp_path, monkeypatch):
 @pytest.mark.parametrize("name", list(themes.THEMES))
 def test_every_theme_has_a_layout_and_numeral(name):
     t = themes.expand(name)
-    assert t["layout"]["bg"] in ("paper", "grid", "notebook", "gradient", "flat")
+    assert t["layout"]["bg"] in ("paper", "grid", "notebook", "gradient", "flat", "scanlines",
+                                 "halftone")
     from synergia.brand.layouts import BLUEPRINTS
     assert t["layout"]["blueprint"] in ("editorial", *BLUEPRINTS)
     assert t["layout"]["align"] in ("left", "center")
@@ -207,6 +208,19 @@ def test_migrates_an_install_from_before_profiles(sandbox_root):
     assert (sandbox_root / "cache" / "transcripts").is_dir()      # shared caches stay put
     assert tomllib.loads((home / "profile.toml").read_text(encoding="utf-8"))["brand"]["name"] == "SYNERGIA"
     assert config.migrate_single_install() is None                 # only once
+
+
+def test_synergia_logo_only_for_profiles_that_ask(monkeypatch):
+    from synergia.brand import elements
+    elements.logo.cache_clear()
+    monkeypatch.setattr(elements.CFG.brand, "logo", None)
+    monkeypatch.setattr(elements.CFG.brand, "mark", "", raising=False)
+    assert elements.logo(30) is None                    # other people's brands: no SYNERGIA mark
+    elements.logo.cache_clear()
+    monkeypatch.setattr(elements.CFG.brand, "mark", "overlap")
+    assert elements.logo(30) is not None                # the SYNERGIA profile keeps it
+    elements.logo.cache_clear()
+    assert profile.synergia_profile()["brand"]["mark"] == "overlap"
 
 
 def test_footer_name_keeps_user_casing(monkeypatch):

@@ -93,7 +93,7 @@ def page(editing: bool = False) -> None:
             def clear_logo() -> None:
                 st["logo"] = ""
                 logo_img.set_visibility(False)
-            ui.button("Use the drawn mark instead", on_click=clear_logo).props("flat dense no-caps")
+            ui.button("Remove the logo", on_click=clear_logo).props("flat dense no-caps")
 
             def next1() -> None:
                 if not name.value.strip():
